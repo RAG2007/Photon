@@ -1,13 +1,13 @@
-CFLAGS = -std=c++17 -O2
+CFLAGS = -std=c++17 -O2 -fsanitize=address,undefined
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
-VulkanTest: main.cpp
-	g++ $(CFLAGS) -o VulkanTest main.cpp $(LDFLAGS)
+VulkanTest: main.c
+	g++ $(CFLAGS) -o main main.c $(LDFLAGS)
 
 .PHONY: test clean
 
 test:	VulkanTest
-	./VulkanTest
+	./main
 
 clean:
 	rm -f VulkanTest
