@@ -1,8 +1,8 @@
-CFLAGS = -std=c++17 -O2 -fsanitize=address,undefined
-LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
+CFLAGS = -O2 -fsanitize=address,undefined
+LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi -g
 
 VulkanTest: main.c
-	g++ $(CFLAGS) -o main main.c $(LDFLAGS)
+	gcc $(CFLAGS) -o main main.c $(LDFLAGS)
 
 .PHONY: test clean
 
