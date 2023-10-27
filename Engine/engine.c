@@ -45,10 +45,8 @@ VkInstance create_instance() {
 	create_info.pApplicationInfo = &application_info;
 	create_info.enabledExtensionCount = extension_count;
 	create_info.ppEnabledExtensionNames = extension_list;
-
 	// TOFIX Add extension count and names
-
-
+	
 	//Creating instance
 	VkInstance instance;
 	if(vkCreateInstance(&create_info, 0, &instance) != VK_SUCCESS)
@@ -93,7 +91,7 @@ int main() {
 		printf("Unable to create instance");
 		return -1;
 	}
-	
+
 	//Picking Physical Device
 	VkPhysicalDevice p_device = pick_physical_device(instance);
 	if(p_device == NULL) {
