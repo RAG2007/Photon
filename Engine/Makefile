@@ -1,13 +1,13 @@
-CFLAGS = -O2 -fsanitize=address,undefined
+CFLAGS = -O2 -fsanitize=address,undefined -g
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi -g
 
-VulkanTest: main.c
-	gcc $(CFLAGS) -o main main.c $(LDFLAGS)
+VulkanTest: engine.c
+	gcc $(CFLAGS) -o engine engine.c $(LDFLAGS)
 
 .PHONY: test clean
 
 test:	VulkanTest
-	./main
+	./engine
 
 clean:
 	rm -f VulkanTest
