@@ -1,5 +1,5 @@
-CFLAGS = -O2 -fsanitize=address,undefined -g
-LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi -g
+CFLAGS = -g -fsanitize=address,undefined
+LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
 VulkanTest: engine.c
 	gcc $(CFLAGS) -o engine engine.c $(LDFLAGS)
