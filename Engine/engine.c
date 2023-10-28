@@ -98,4 +98,7 @@ int main() {
 		printf("Unable to pick device");
 		return -1;
 	}
+	VkPhysicalDeviceProperties p_device_properties;
+	vkGetPhysicalDeviceProperties(p_device, &p_device_properties);
+	printf("%s", p_device_properties.deviceName);
 }
