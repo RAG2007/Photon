@@ -170,8 +170,7 @@ int main() {
 		return -1;
 	}
 
-
-
+	
 
 	//main loop
 	while (!glfwWindowShouldClose(window)) {
