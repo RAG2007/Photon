@@ -114,14 +114,14 @@ VkDeviceQueueCreateInfo find_queue_families(VkPhysicalDevice p_device) {
 }
 
 VkDevice create_logical_device(VkPhysicalDevice p_device, VkInstance instance, VkDeviceQueueCreateInfo queue_create_info, VkPhysicalDeviceFeatures p_device_features) {
-	const char * const device_extension_list =  {
+	const char * const device_extension_list[] =  {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
 
 
 	VkDeviceCreateInfo l_device_creation_info;
 	l_device_creation_info.enabledExtensionCount = 1;
-	l_device_creation_info.ppEnabledExtensionNames = &device_extension_list;
+	l_device_creation_info.ppEnabledExtensionNames = device_extension_list;
 	l_device_creation_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	l_device_creation_info.queueCreateInfoCount = 1;
 	l_device_creation_info.pQueueCreateInfos = &queue_create_info;
@@ -187,7 +187,7 @@ int main() {
 	//cleanup
 	vkDestroySurfaceKHR(instance, surface, 0);
 	vkDestroyDevice(l_device, NULL);
-	//vkDestroyInstance(instance, NULL);
+	vkDestroyInstance(instance, NULL);
 	glfwDestroyWindow(window);
 	glfwTerminate();
 }
