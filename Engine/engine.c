@@ -114,11 +114,12 @@ VkDeviceQueueCreateInfo find_queue_families(VkPhysicalDevice p_device) {
 }
 
 VkDevice create_logical_device(VkPhysicalDevice p_device, VkInstance instance, VkDeviceQueueCreateInfo queue_create_info, VkPhysicalDeviceFeatures p_device_features) {
+	//creating required device extensions list
 	const char * const device_extension_list[] =  {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
 
-
+	//creating logical device creation info
 	VkDeviceCreateInfo l_device_creation_info;
 	l_device_creation_info.enabledExtensionCount = 1;
 	l_device_creation_info.ppEnabledExtensionNames = device_extension_list;
@@ -133,6 +134,81 @@ VkDevice create_logical_device(VkPhysicalDevice p_device, VkInstance instance, V
 }
 
 
+VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface, uint32_t queue_family_index, VkDevice l_device) {
+	VkSurfaceCapabilitiesKHR capabilities;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(p_device, surface, &capabilities);
+	//TOFIX: ADD runtime error if required capabilities are not met
+
+	//checking present modes
+	uint32_t present_mode_count;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(p_device, surface, &present_mode_count, NULL);
+	if(present_mode_count == 0)
+		return NULL;
+	VkPresentModeKHR present_modes[present_mode_count];
+	vkGetPhysicalDeviceSurfacePresentModesKHR(p_device, surface, &present_mode_count, present_modes);
+	VkPresentModeKHR present_mode = 0;
+	int done = 0;
+	for (int i = 0; i < present_mode_count; i++) {
+		if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+			present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+			done = 1;
+		}
+	}
+	if (done == 0)
+		present_mode = VK_PRESENT_MODE_FIFO_KHR;
+
+	//setting surface format
+	uint32_t surface_format_count;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(p_device, surface, &surface_format_count, NULL);
+	VkSurfaceFormatKHR surface_formats[surface_format_count];
+	vkGetPhysicalDeviceSurfaceFormatsKHR(p_device, surface, &surface_format_count, surface_formats);
+
+	VkSurfaceFormatKHR surface_format;
+	done = 0;
+	for (int i = 0; i < surface_format_count; i++) {
+		if (surface_formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && surface_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+			surface_format = surface_formats[i];
+		}
+	}
+	if(done == 0)
+		surface_format = surface_formats[0];
+
+	//setting swapchain extent
+	VkExtent2D extent;
+	extent.height = HEIGHT;
+	extent.width = WIDTH;
+
+	//creating SwapChain creation info
+	uint32_t imageCount = capabilities.minImageCount + 1;
+	if(imageCount > capabilities.maxImageCount && capabilities.maxImageCount != 0)
+		imageCount = capabilities.maxImageCount;
+
+	
+	VkSwapchainCreateInfoKHR create_info;
+	create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	create_info.surface = surface;
+	create_info.minImageCount = imageCount;
+	create_info.imageFormat = surface_format.format;
+	create_info.imageColorSpace = surface_format.colorSpace;
+	create_info.imageExtent = extent;
+	create_info.imageArrayLayers = 1;
+	create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // TOFIX add post processing
+	create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	create_info.preTransform = capabilities.currentTransform;
+	create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	create_info.presentMode = present_mode;
+	create_info.clipped = VK_TRUE;
+	create_info.oldSwapchain = VK_NULL_HANDLE;
+
+	VkSwapchainKHR swap_chain;
+	if (vkCreateSwapchainKHR(l_device, &create_info, NULL, &swap_chain) != VK_SUCCESS) {
+		vkDestroySwapchainKHR(l_device, swap_chain, NULL);
+		return NULL;
+	}
+	return swap_chain;
+}
+
+
 int main() {
 	//Window Initialization
 	GLFWwindow* window = init_window();
@@ -140,7 +216,7 @@ int main() {
 	//Instance Creation
 	VkInstance instance = create_instance();
 	if(instance == NULL) {
-		printf("Unable to create instance");
+		printf("Unable to create instance Aborting");
 		return -1;
 	}
 
@@ -152,7 +228,7 @@ int main() {
 	vkGetPhysicalDeviceProperties(p_device, &p_device_properties);
 	printf("%s\n", p_device_properties.deviceName);
 	if(p_device == NULL) {
-		printf("Unable to pick device!");
+		printf("Unable to pick device! Aborting");
 		return -1;
 	}
 	VkDeviceQueueCreateInfo queue_create_info = find_queue_families(p_device);
@@ -160,7 +236,7 @@ int main() {
 	//device creations
 	VkDevice l_device = create_logical_device(p_device, instance, queue_create_info, p_device_features);
 	if(l_device == NULL) {
-		printf("Failed to create logical device!");
+		printf("Failed to create logical device! Aborting");
 		return -1;
 	}
 
@@ -177,6 +253,12 @@ int main() {
 		return -1;
 	}
 
+	//swapchain creation
+	VkSwapchainKHR swap_chain = create_swapchain(p_device, surface, queue_create_info.queueFamilyIndex, l_device);
+	if(swap_chain == NULL) {
+		printf("Failed to create swap chain! Aborting");
+		return -1;
+	}
 	
 
 	//main loop
@@ -185,7 +267,8 @@ int main() {
 	}
 
 	//cleanup
-	vkDestroySurfaceKHR(instance, surface, 0);
+	vkDestroySwapchainKHR(l_device, swap_chain, NULL);
+	vkDestroySurfaceKHR(instance, surface, NULL);
 	vkDestroyDevice(l_device, NULL);
 	vkDestroyInstance(instance, NULL);
 	glfwDestroyWindow(window);
