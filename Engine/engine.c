@@ -145,8 +145,6 @@ VkSurfaceFormatKHR setting_surface_format(VkPhysicalDevice p_device, VkSurfaceKH
 VkPresentModeKHR setting_present_mode(VkPhysicalDevice p_device, VkSurfaceKHR surface) {
 	uint32_t present_mode_count;
 	vkGetPhysicalDeviceSurfacePresentModesKHR(p_device, surface, &present_mode_count, NULL);
-	if(present_mode_count == 0)
-		return NULL;
 	VkPresentModeKHR present_modes[present_mode_count];
 	vkGetPhysicalDeviceSurfacePresentModesKHR(p_device, surface, &present_mode_count, present_modes);
 	for (int i = 0; i < present_mode_count; i++) {
