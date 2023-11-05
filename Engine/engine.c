@@ -130,50 +130,51 @@ VkDevice create_logical_device(VkPhysicalDevice p_device, VkInstance instance, V
 	return l_device;
 }
 
-VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface, uint32_t queue_family_index, VkDevice l_device) {
-	VkSurfaceCapabilitiesKHR capabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(p_device, surface, &capabilities);
-	//TOFIX: ADD runtime error if required capabilities are not met
+VkSurfaceFormatKHR setting_surface_format(VkPhysicalDevice p_device, VkSurfaceKHR surface) {
+	uint32_t surface_format_count;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(p_device, surface, &surface_format_count, NULL);
+	VkSurfaceFormatKHR surface_formats[surface_format_count];
+	vkGetPhysicalDeviceSurfaceFormatsKHR(p_device, surface, &surface_format_count, surface_formats);
+	for (int i = 0; i < surface_format_count; i++) {
+		if (surface_formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && surface_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+			return surface_formats[i];
+	}
+	return surface_formats[0];
+}
 
-	//checking present modes
+VkPresentModeKHR setting_present_mode(VkPhysicalDevice p_device, VkSurfaceKHR surface) {
 	uint32_t present_mode_count;
 	vkGetPhysicalDeviceSurfacePresentModesKHR(p_device, surface, &present_mode_count, NULL);
 	if(present_mode_count == 0)
 		return NULL;
 	VkPresentModeKHR present_modes[present_mode_count];
 	vkGetPhysicalDeviceSurfacePresentModesKHR(p_device, surface, &present_mode_count, present_modes);
-	VkPresentModeKHR present_mode = 0;
-	int done = 0;
 	for (int i = 0; i < present_mode_count; i++) {
-		if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
-			present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
-			done = 1;
-		}
+		if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+			return VK_PRESENT_MODE_MAILBOX_KHR;
 	}
-	if (done == 0)
-		present_mode = VK_PRESENT_MODE_FIFO_KHR;
+	return VK_PRESENT_MODE_FIFO_KHR;
+}
 
-	//setting surface format
-	uint32_t surface_format_count;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(p_device, surface, &surface_format_count, NULL);
-	VkSurfaceFormatKHR surface_formats[surface_format_count];
-	vkGetPhysicalDeviceSurfaceFormatsKHR(p_device, surface, &surface_format_count, surface_formats);
-
-	VkSurfaceFormatKHR surface_format;
-	done = 0;
-	for (int i = 0; i < surface_format_count; i++) {
-		if (surface_formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && surface_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-			surface_format = surface_formats[i];
-			done = 1;
-		}
-	}
-	if(done == 0)
-		surface_format = surface_formats[0];
-
-	//setting swapchain extent
+VkExtent2D setting_swapchain_extent() {
+	//TOFIX add better logic to if extent is valid
 	VkExtent2D extent;
 	extent.height = HEIGHT;
 	extent.width = WIDTH;
+	return extent;
+}
+	
+
+VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface, uint32_t queue_family_index, VkDevice l_device, VkSurfaceFormatKHR surface_format, VkPresentModeKHR present_mode, VkExtent2D extent) {
+	VkSurfaceCapabilitiesKHR capabilities;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(p_device, surface, &capabilities);
+	//TOFIX: ADD runtime error if required capabilities are not met
+
+	//checking present modes
+	
+	
+	//setting swapchain extent
+	
 
 	//creating SwapChain creation info
 	uint32_t imageCount = capabilities.minImageCount + 1;
@@ -249,7 +250,10 @@ int main() {
 	}
 
 	//swapchain creation
-	VkSwapchainKHR swap_chain = create_swapchain(p_device, surface, queue_create_info.queueFamilyIndex, l_device);
+	VkSurfaceFormatKHR surface_format = setting_surface_format(p_device, surface);
+	VkPresentModeKHR present_mode = setting_present_mode(p_device, surface);
+	VkExtent2D extent = setting_swapchain_extent();
+	VkSwapchainKHR swap_chain = create_swapchain(p_device, surface, queue_create_info.queueFamilyIndex, l_device, surface_format, present_mode, extent);
 	if(swap_chain == NULL) {
 		printf("Failed to create swap chain! Aborting");
 		return -1;
