@@ -162,17 +162,10 @@ VkExtent2D setting_swapchain_extent() {
 	return extent;
 }
 	
-
 VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface, uint32_t queue_family_index, VkDevice l_device, VkSurfaceFormatKHR surface_format, VkPresentModeKHR present_mode, VkExtent2D extent) {
 	VkSurfaceCapabilitiesKHR capabilities;
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(p_device, surface, &capabilities);
 	//TOFIX: ADD runtime error if required capabilities are not met
-
-	//checking present modes
-	
-	
-	//setting swapchain extent
-	
 
 	//creating SwapChain creation info
 	uint32_t imageCount = capabilities.minImageCount + 1;
@@ -256,7 +249,6 @@ int main() {
 		printf("Failed to create swap chain! Aborting");
 		return -1;
 	}
-	
 
 	//main loop
 	while (!glfwWindowShouldClose(window)) {
