@@ -51,7 +51,7 @@ VkInstance create_instance() {
 	
 	//Creating instance
 	VkInstance instance;
-	if(vkCreateInstance(&create_info, NULL, &instance) != VK_SUCCESS)
+	if (vkCreateInstance(&create_info, NULL, &instance) != VK_SUCCESS)
 		return NULL;
 	return instance;
 }
@@ -59,26 +59,26 @@ VkInstance create_instance() {
 VkPhysicalDevice pick_physical_device(VkInstance instance) {
 	//Checking count of physical devices
 	uint32_t p_device_count = 0;
-	if(vkEnumeratePhysicalDevices(instance, &p_device_count, NULL) != VK_SUCCESS)
+	if (vkEnumeratePhysicalDevices(instance, &p_device_count, NULL) != VK_SUCCESS)
 		return NULL;
 
 	//Loading list of physical devices
 	VkPhysicalDevice p_device_list[p_device_count];
-	if(vkEnumeratePhysicalDevices(instance, &p_device_count, p_device_list) != VK_SUCCESS)
+	if (vkEnumeratePhysicalDevices(instance, &p_device_count, p_device_list) != VK_SUCCESS)
 		return NULL;
 
 	//Picking right physical device
 	int best_index = -1;
-	for(int i = 0; i < p_device_count; i++) {
+	for (int i = 0; i < p_device_count; i++) {
 		VkPhysicalDeviceProperties p_device_properties;
 		vkGetPhysicalDeviceProperties(p_device_list[i], &p_device_properties);
 		// here TOFIX - add logic to picking p_device
-		if(p_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+		if (p_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 			best_index = i;
-		if(p_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU && best_index == -1)
+		if (p_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU && best_index == -1)
 			best_index = i;
 	}
-	if(best_index != -1)
+	if (best_index != -1)
 		return p_device_list[best_index];
 	return NULL;
 }
@@ -92,14 +92,14 @@ VkDeviceQueueCreateInfo find_queue_families(VkPhysicalDevice p_device) {
 	int queue_family_index = -1;
 	uint32_t queue_count = 0;
 
-	for(int i = 0; i < queue_family_properties_count; i++) {
+	for (int i = 0; i < queue_family_properties_count; i++) {
 		if (queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			queue_family_index = i;
 			queue_count = queue_family_properties[i].queueCount;
 		}
 	}
 	float queue_priorities[queue_count];
-	for(int i = 0; i < queue_count; i++) {
+	for (int i = 0; i < queue_count; i++) {
 		queue_priorities[i] = (float)1 / queue_count;
 	}
 	VkDeviceQueueCreateInfo queue_create_info;
@@ -125,7 +125,7 @@ VkDevice create_logical_device(VkPhysicalDevice p_device, VkInstance instance, V
 	l_device_creation_info.pQueueCreateInfos = &queue_create_info;
 	l_device_creation_info.pEnabledFeatures = &p_device_features;
 	VkDevice l_device;
-	if(vkCreateDevice(p_device, &l_device_creation_info, NULL, &l_device) != VK_SUCCESS)
+	if (vkCreateDevice(p_device, &l_device_creation_info, NULL, &l_device) != VK_SUCCESS)
 		return NULL;
 	return l_device;
 }
@@ -169,7 +169,7 @@ VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 
 	//creating SwapChain creation info
 	uint32_t imageCount = capabilities.minImageCount + 1;
-	if(imageCount > capabilities.maxImageCount && capabilities.maxImageCount != 0)
+	if (imageCount > capabilities.maxImageCount && capabilities.maxImageCount != 0)
 		imageCount = capabilities.maxImageCount;
 	
 	VkSwapchainCreateInfoKHR create_info;
@@ -202,7 +202,7 @@ int main() {
 
 	//Instance Creation
 	VkInstance instance = create_instance();
-	if(instance == NULL) {
+	if (instance == NULL) {
 		printf("Unable to create instance Aborting");
 		return -1;
 	}
@@ -214,7 +214,7 @@ int main() {
 	VkPhysicalDeviceProperties p_device_properties;
 	vkGetPhysicalDeviceProperties(p_device, &p_device_properties);
 	printf("%s\n", p_device_properties.deviceName);
-	if(p_device == NULL) {
+	if (p_device == NULL) {
 		printf("Unable to pick device! Aborting");
 		return -1;
 	}
@@ -222,20 +222,20 @@ int main() {
 
 	//device creations
 	VkDevice l_device = create_logical_device(p_device, instance, queue_create_info, p_device_features);
-	if(l_device == NULL) {
+	if (l_device == NULL) {
 		printf("Failed to create logical device! Aborting");
 		return -1;
 	}
 
 	//queues creation
 	VkQueue queues[queue_create_info.queueCount];
-	for(int i = 0; i < queue_create_info.queueCount; i++) {
+	for (int i = 0; i < queue_create_info.queueCount; i++) {
 		vkGetDeviceQueue(l_device, queue_create_info.queueFamilyIndex, i, &queues[i]);
 	}
 	
 	//window surface cration
 	VkSurfaceKHR surface;
-	if(glfwCreateWindowSurface(instance, window, NULL, &surface) != VK_SUCCESS) {
+	if (glfwCreateWindowSurface(instance, window, NULL, &surface) != VK_SUCCESS) {
 		printf("Failed to create window surface!");
 		return -1;
 	}
@@ -245,7 +245,7 @@ int main() {
 	VkPresentModeKHR present_mode = setting_present_mode(p_device, surface);
 	VkExtent2D extent = setting_swapchain_extent();
 	VkSwapchainKHR swap_chain = create_swapchain(p_device, surface, queue_create_info.queueFamilyIndex, l_device, surface_format, present_mode, extent);
-	if(swap_chain == NULL) {
+	if (swap_chain == NULL) {
 		printf("Failed to create swap chain! Aborting");
 		return -1;
 	}
