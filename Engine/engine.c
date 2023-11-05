@@ -18,8 +18,6 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-
-
 GLFWwindow* init_window() {
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -42,7 +40,6 @@ VkInstance create_instance() {
 	uint32_t extension_count = 0;
 	glfwGetRequiredInstanceExtensions(&extension_count);
 	const char **extension_list = glfwGetRequiredInstanceExtensions(&extension_count);
-
 
 	//Creating Instance Create info
 	VkInstanceCreateInfo create_info;
@@ -133,7 +130,6 @@ VkDevice create_logical_device(VkPhysicalDevice p_device, VkInstance instance, V
 	return l_device;
 }
 
-
 VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface, uint32_t queue_family_index, VkDevice l_device) {
 	VkSurfaceCapabilitiesKHR capabilities;
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(p_device, surface, &capabilities);
@@ -168,6 +164,7 @@ VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	for (int i = 0; i < surface_format_count; i++) {
 		if (surface_formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && surface_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
 			surface_format = surface_formats[i];
+			done = 1;
 		}
 	}
 	if(done == 0)
@@ -182,7 +179,6 @@ VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	uint32_t imageCount = capabilities.minImageCount + 1;
 	if(imageCount > capabilities.maxImageCount && capabilities.maxImageCount != 0)
 		imageCount = capabilities.maxImageCount;
-
 	
 	VkSwapchainCreateInfoKHR create_info;
 	create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -207,7 +203,6 @@ VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	}
 	return swap_chain;
 }
-
 
 int main() {
 	//Window Initialization
