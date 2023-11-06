@@ -30,6 +30,7 @@ VkInstance create_instance() {
 	//Creating Application Info
 	VkApplicationInfo application_info;
 	application_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	application_info.pNext = NULL;
 	application_info.pApplicationName = "Photon";
 	application_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	application_info.pEngineName = "Itself";
@@ -44,7 +45,10 @@ VkInstance create_instance() {
 	//Creating Instance Create info
 	VkInstanceCreateInfo create_info;
 	create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	create_info.pNext = NULL;
+	create_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 	create_info.pApplicationInfo = &application_info;
+	create_info.enabledLayerCount = 0;
 	create_info.enabledExtensionCount = extension_count;
 	create_info.ppEnabledExtensionNames = extension_list;
 	// TOFIX Add extension count and names
@@ -104,15 +108,17 @@ VkDeviceQueueCreateInfo find_queue_families(VkPhysicalDevice p_device) {
 	}
 	VkDeviceQueueCreateInfo queue_create_info;
 	queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queue_create_info.pNext = NULL;
+	queue_create_info.flags = VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT;
 	queue_create_info.queueFamilyIndex = queue_family_index;
 	queue_create_info.queueCount = queue_count;
 	queue_create_info.pQueuePriorities = queue_priorities;
 	return queue_create_info;
 }
 
-VkDevice create_logical_device(VkPhysicalDevice p_device, VkInstance instance, VkDeviceQueueCreateInfo queue_create_info, VkPhysicalDeviceFeatures p_device_features) {
+VkDevice create_logical_device(VkPhysicalDevice p_device, VkInstance instance, VkDeviceQueueCreateInfo queue_create_info[], VkPhysicalDeviceFeatures p_device_features) {
 	//creating required device extensions list
-	const char * const device_extension_list[] =  {
+	const char *const device_extension_list[] =  {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
 
@@ -121,8 +127,11 @@ VkDevice create_logical_device(VkPhysicalDevice p_device, VkInstance instance, V
 	l_device_creation_info.enabledExtensionCount = 1;
 	l_device_creation_info.ppEnabledExtensionNames = device_extension_list;
 	l_device_creation_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	l_device_creation_info.pNext = NULL;
+	l_device_creation_info.flags = 0;
+	l_device_creation_info.enabledLayerCount = 0;
 	l_device_creation_info.queueCreateInfoCount = 1;
-	l_device_creation_info.pQueueCreateInfos = &queue_create_info;
+	l_device_creation_info.pQueueCreateInfos = queue_create_info;
 	l_device_creation_info.pEnabledFeatures = &p_device_features;
 	VkDevice l_device;
 	if (vkCreateDevice(p_device, &l_device_creation_info, NULL, &l_device) != VK_SUCCESS)
@@ -174,7 +183,11 @@ VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	
 	VkSwapchainCreateInfoKHR create_info;
 	create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	create_info.pNext = NULL;
+	create_info.flags = 0;
 	create_info.surface = surface;
+	create_info.pQueueFamilyIndices = NULL;
+	create_info.pQueueFamilyIndices = NULL;
 	create_info.minImageCount = imageCount;
 	create_info.imageFormat = surface_format.format;
 	create_info.imageColorSpace = surface_format.colorSpace;
@@ -196,6 +209,31 @@ VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	return swap_chain;
 }
 
+int create_image_views(VkDevice l_device, VkImage images[], uint32_t swapchain_image_count, VkSurfaceFormatKHR surface_format, VkImageView image_views[]) {
+	for (size_t i = 0; i < swapchain_image_count; i++) {
+		VkImageViewCreateInfo createInfo;
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.pNext = NULL;
+		createInfo.flags = 0;
+		createInfo.image = images[i];
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = surface_format.format;
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+		if (vkCreateImageView(l_device, &createInfo, NULL, &image_views[i]) != VK_SUCCESS) {
+			return -1;
+		}
+	}
+	return 0;
+}
+
 int main() {
 	//Window Initialization
 	GLFWwindow* window = init_window();
@@ -206,22 +244,22 @@ int main() {
 		printf("Unable to create instance Aborting");
 		return -1;
 	}
-
 	//Picking Physical Device
 	VkPhysicalDevice p_device = pick_physical_device(instance);
 	VkPhysicalDeviceFeatures p_device_features;
 	vkGetPhysicalDeviceFeatures(p_device, &p_device_features);
 	VkPhysicalDeviceProperties p_device_properties;
+
 	vkGetPhysicalDeviceProperties(p_device, &p_device_properties);
-	printf("%s\n", p_device_properties.deviceName);
 	if (p_device == NULL) {
 		printf("Unable to pick device! Aborting");
 		return -1;
 	}
+
 	VkDeviceQueueCreateInfo queue_create_info = find_queue_families(p_device);
 
 	//device creations
-	VkDevice l_device = create_logical_device(p_device, instance, queue_create_info, p_device_features);
+	VkDevice l_device = create_logical_device(p_device, instance, &queue_create_info, p_device_features);
 	if (l_device == NULL) {
 		printf("Failed to create logical device! Aborting");
 		return -1;
@@ -244,11 +282,24 @@ int main() {
 	VkSurfaceFormatKHR surface_format = setting_surface_format(p_device, surface);
 	VkPresentModeKHR present_mode = setting_present_mode(p_device, surface);
 	VkExtent2D extent = setting_swapchain_extent();
-	VkSwapchainKHR swap_chain = create_swapchain(p_device, surface, queue_create_info.queueFamilyIndex, l_device, surface_format, present_mode, extent);
-	if (swap_chain == NULL) {
+	VkSwapchainKHR swapchain = create_swapchain(p_device, surface, queue_create_info.queueFamilyIndex, l_device, surface_format, present_mode, extent);
+	if (swapchain == NULL) {
 		printf("Failed to create swap chain! Aborting");
 		return -1;
 	}
+
+	uint32_t swapchain_image_count;
+	vkGetSwapchainImagesKHR(l_device, swapchain, &swapchain_image_count, NULL);
+	VkImage swapchain_images[swapchain_image_count];
+	vkGetSwapchainImagesKHR(l_device, swapchain, &swapchain_image_count, swapchain_images);
+
+	//Creating image views
+	VkImageView image_views[swapchain_image_count];
+	if(create_image_views(l_device, swapchain_images, swapchain_image_count, surface_format, image_views) != 0) {
+		printf("Failed to create Image Views");
+		return -1;
+	}
+
 
 	//main loop
 	while (!glfwWindowShouldClose(window)) {
@@ -256,7 +307,10 @@ int main() {
 	}
 
 	//cleanup
-	vkDestroySwapchainKHR(l_device, swap_chain, NULL);
+	for (int i = 0; i < swapchain_image_count; i++) {
+		vkDestroyImageView(l_device, image_views[i], NULL);
+	}
+	vkDestroySwapchainKHR(l_device, swapchain, NULL);
 	vkDestroySurfaceKHR(instance, surface, NULL);
 	vkDestroyDevice(l_device, NULL);
 	vkDestroyInstance(instance, NULL);
