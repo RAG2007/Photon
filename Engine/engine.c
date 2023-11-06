@@ -108,7 +108,6 @@ VkDeviceQueueCreateInfo find_queue_families(VkPhysicalDevice p_device) {
 	VkDeviceQueueCreateInfo create_info;
 	memset(&create_info, 0, sizeof(VkDeviceQueueCreateInfo));
 	create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	create_info.flags = VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT;
 	create_info.queueFamilyIndex = queue_family_index;
 	create_info.queueCount = queue_count;
 	create_info.pQueuePriorities = queue_priorities;
