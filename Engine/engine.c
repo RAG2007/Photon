@@ -29,8 +29,8 @@ GLFWwindow* init_window() {
 VkInstance create_instance() {
 	//Creating Application Info
 	VkApplicationInfo application_info;
+	memset(&application_info, 0, sizeof(VkApplicationInfo));
 	application_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	application_info.pNext = NULL;
 	application_info.pApplicationName = "Photon";
 	application_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	application_info.pEngineName = "Itself";
@@ -44,11 +44,10 @@ VkInstance create_instance() {
 
 	//Creating Instance Create info
 	VkInstanceCreateInfo create_info;
+	memset(&create_info, 0, sizeof(VkInstanceCreateInfo));
 	create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	create_info.pNext = NULL;
 	create_info.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 	create_info.pApplicationInfo = &application_info;
-	create_info.enabledLayerCount = 0;
 	create_info.enabledExtensionCount = extension_count;
 	create_info.ppEnabledExtensionNames = extension_list;
 	// TOFIX Add extension count and names
@@ -107,8 +106,8 @@ VkDeviceQueueCreateInfo find_queue_families(VkPhysicalDevice p_device) {
 		queue_priorities[i] = (float)1 / queue_count;
 	}
 	VkDeviceQueueCreateInfo create_info;
+	memset(&create_info, 0, sizeof(VkDeviceQueueCreateInfo));
 	create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	create_info.pNext = NULL;
 	create_info.flags = VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT;
 	create_info.queueFamilyIndex = queue_family_index;
 	create_info.queueCount = queue_count;
@@ -124,12 +123,10 @@ VkDevice create_logical_device(VkPhysicalDevice p_device, VkInstance instance, V
 
 	//creating logical device creation info
 	VkDeviceCreateInfo create_info;
+	memset(&create_info, 0, sizeof(VkDeviceCreateInfo));
 	create_info.enabledExtensionCount = 1;
 	create_info.ppEnabledExtensionNames = device_extension_list;
 	create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	create_info.pNext = NULL;
-	create_info.flags = 0;
-	create_info.enabledLayerCount = 0;
 	create_info.queueCreateInfoCount = 1;
 	create_info.pQueueCreateInfos = queue_create_info;
 	create_info.pEnabledFeatures = &p_device_features;
@@ -182,12 +179,9 @@ VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 		imageCount = capabilities.maxImageCount;
 	
 	VkSwapchainCreateInfoKHR create_info;
+	memset(&create_info, 0, sizeof(VkSwapchainCreateInfoKHR));
 	create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	create_info.pNext = NULL;
-	create_info.flags = 0;
 	create_info.surface = surface;
-	create_info.pQueueFamilyIndices = NULL;
-	create_info.pQueueFamilyIndices = NULL;
 	create_info.minImageCount = imageCount;
 	create_info.imageFormat = surface_format.format;
 	create_info.imageColorSpace = surface_format.colorSpace;
@@ -212,9 +206,8 @@ VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 int create_image_views(VkDevice l_device, VkImage images[], uint32_t swapchain_image_count, VkSurfaceFormatKHR surface_format, VkImageView image_views[]) {
 	for (size_t i = 0; i < swapchain_image_count; i++) {
 		VkImageViewCreateInfo create_info;
+		memset(&create_info, 0, sizeof(VkImageViewCreateInfo));
 		create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		create_info.pNext = NULL;
-		create_info.flags = 0;
 		create_info.image = images[i];
 		create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		create_info.format = surface_format.format;
@@ -223,9 +216,7 @@ int create_image_views(VkDevice l_device, VkImage images[], uint32_t swapchain_i
 		create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
 		create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
 		create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		create_info.subresourceRange.baseMipLevel = 0;
 		create_info.subresourceRange.levelCount = 1;
-		create_info.subresourceRange.baseArrayLayer = 0;
 		create_info.subresourceRange.layerCount = 1;
 		if (vkCreateImageView(l_device, &create_info, NULL, &image_views[i]) != VK_SUCCESS) {
 			return -1;
