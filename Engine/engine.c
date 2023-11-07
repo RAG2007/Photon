@@ -1,10 +1,15 @@
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdlib.h>
+
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <vulkan/vulkan_core.h>
 #include <GLFW/glfw3native.h>
 #include <GLFW/glfw3.h>
@@ -222,6 +227,93 @@ int create_image_views(VkDevice l_device, VkImage images[], uint32_t swapchain_i
 		}
 	}
 	return 0;
+}
+
+
+char *read_file(char *name, int *length) {
+	int fd = open(name, O_RDONLY);
+
+	if (fd == -1) {
+		fprintf(stderr, "Failed to open file - %s\n", strerror(errno));
+		return NULL;
+	}
+
+	struct stat st;
+
+	if (fstat(fd, &st) == -1) {
+		fprintf(stderr, "Failed get file size - %s\n", strerror(errno));
+		return NULL;
+	}
+
+	char *buffer = malloc(st.st_size);
+
+	if (!buffer) {
+		fprintf(stderr, "Failed allocate memory - %s\n", strerror(errno));
+		return NULL;
+	}
+
+	if (read(fd, buffer, st.st_size) != st.st_size) {
+		fprintf(stderr, "Failed to read file - %s\n", strerror(errno));
+		return NULL;
+	}
+	*length = st.st_size;
+	return buffer;
+}
+
+VkShaderModule createShaderModule(VkDevice l_device, const char *code, int code_length) {
+	VkShaderModuleCreateInfo create_info;
+	memset(&create_info, 0, sizeof(VkShaderModuleCreateInfo));
+	create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	create_info.codeSize = code_length;
+	create_info.pCode = (uint *)code;
+	VkShaderModule shader_module;
+	if (vkCreateShaderModule(l_device, &create_info, NULL, &shader_module) != VK_SUCCESS) {
+		printf("Failed to create Shader Module");
+		return NULL;
+	}
+	return shader_module;
+}
+
+void create_graphics_pipeline(VkDevice l_device, VkPipelineShaderStageCreateInfo shader_stages_return[]) {
+	int length_vert;
+	int length_frag;
+	char *vert_shader_code = read_file("shaders/vert.spv", &length_vert);
+	char *frag_shader_code = read_file("shaders/frag.spv", &length_frag);
+
+	VkShaderModule vert_shader_module = createShaderModule(l_device, vert_shader_code, length_vert);
+	VkShaderModule frag_shader_module = createShaderModule(l_device, frag_shader_code, length_frag);
+
+	VkPipelineShaderStageCreateInfo vert_shader_stage_info;
+	memset(&vert_shader_stage_info, 0, sizeof(VkPipelineShaderStageCreateInfo));
+	vert_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vert_shader_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vert_shader_stage_info.module = vert_shader_module;
+	vert_shader_stage_info.pName = "main";
+
+
+	VkPipelineShaderStageCreateInfo frag_shader_stage_info;
+	memset(&frag_shader_stage_info, 0, sizeof(VkPipelineShaderStageCreateInfo));
+	frag_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	frag_shader_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	frag_shader_stage_info.module = vert_shader_module;
+	frag_shader_stage_info.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shader_stages[] = {
+		vert_shader_stage_info,
+		frag_shader_stage_info
+	};
+
+	VkDynamicState dynamic_states[] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+
+	VkPipelineDynamicStateCreateInfo dynamic_state;
+	dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamic_state.dynamicStateCount = 2;
+	dynamic_state.pDynamicStates = dynamic_states;
+	vkDestroyShaderModule(l_device, vert_shader_module, NULL);
+	vkDestroyShaderModule(l_device, frag_shader_module, NULL);
 }
 
 int main() {
