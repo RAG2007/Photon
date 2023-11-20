@@ -19,7 +19,7 @@
 #include <GLFW/glfw3native.h>
 
 const uint32_t WIDTH = 800;
-const uint32_t HEIGHT = 600;
+const uint32_t HEIGHT = 800;
 
 GLFWwindow* init_window()
 {
@@ -330,7 +330,8 @@ VkShaderModule create_shader_module(VkDevice l_device, const char *code,
 }
 
 void create_graphics_pipeline(VkDevice l_device,
-			      VkPipelineShaderStageCreateInfo shader_stages_r[])
+			      VkPipelineShaderStageCreateInfo shader_stages_r[],
+			      VkExtent2D extent)
 {
 	int length_vert;
 	int length_frag;
@@ -383,8 +384,63 @@ void create_graphics_pipeline(VkDevice l_device,
 		.pDynamicStates = dynamic_states
 	};
 
+	VkPipelineVertexInputStateCreateInfo vertex_input_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		.pNext = 0,
+		.flags = 0,
+		.vertexBindingDescriptionCount = 0,
+		.pVertexBindingDescriptions = 0,
+		.vertexAttributeDescriptionCount = 0,
+		.pVertexAttributeDescriptions = 0
+	};
+
+	VkPipelineInputAssemblyStateCreateInfo input_assembly = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.pNext = 0,
+		.flags = 0,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		.primitiveRestartEnable = VK_TRUE
+	};
+
+	VkViewport viewport = {
+		.x = 0.0f,
+		.y = 0.0f,
+		.width = (float) extent.width,
+		.height = (float) extent.height,
+		.minDepth = 0.0f,
+		.maxDepth = 1.0f
+	};
+
+	VkRect2D scissor = {
+		.offset = {0, 0},
+		.extent = extent
+	};
+
+	VkPipelineViewportStateCreateInfo viewport_state = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.pNext = 0,
+		.flags = 0,
+		.viewportCount = 1,
+		.pViewports = &viewport,
+		.scissorCount = 1,
+		.pScissors = &scissor
+	};
+
+	VkPipelineRasterizationStateCreateInfo rasterizer = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.pNext = 0,
+		.flags = 0,
+		.depthClampEnable = VK_FALSE,
+		.rasterizerDiscardEnable = VK_FALSE,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = VK_CULL_MODE_BACK_BIT,
+		.frontFace = VK_FRONT_FACE_CLOCKWISE,
+		.lineWidth = 1.0f,
+		
+	};
 
 	//REST OF THE CODE
+
 	
 	vkDestroyShaderModule(l_device, vert_shader_module, NULL);
 	vkDestroyShaderModule(l_device, frag_shader_module, NULL);
