@@ -495,7 +495,10 @@ VkPipelineLayout create_graphics_pipeline(VkDevice l_device, VkExtent2D extent)
 	if (vkCreatePipelineLayout(l_device, &pipeline_layout_info, 0, &pipeline_layout) != VK_SUCCESS) {
 		return NULL;
 	};
+
 	
+	free(frag_shader_code);
+	free(vert_shader_code);
 	vkDestroyShaderModule(l_device, vert_shader_module, NULL);
 	vkDestroyShaderModule(l_device, frag_shader_module, NULL);
 	return pipeline_layout;
