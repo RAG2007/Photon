@@ -489,7 +489,7 @@ VkPipelineLayout create_graphics_pipeline(VkDevice l_device, VkExtent2D extent)
 		.setLayoutCount = 0,
 		.pSetLayouts = 0,
 		.pushConstantRangeCount = 0,
-		.pPushConstantRanges = 0,
+		.pPushConstantRanges = 0
 	};
 	//REST OF THE CODE
 	if (vkCreatePipelineLayout(l_device, &pipeline_layout_info, 0, &pipeline_layout) != VK_SUCCESS) {
