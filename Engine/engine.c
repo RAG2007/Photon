@@ -329,9 +329,7 @@ VkShaderModule create_shader_module(VkDevice l_device, const char *code,
 	return shader_module;
 }
 
-void create_graphics_pipeline(VkDevice l_device,
-			      VkPipelineShaderStageCreateInfo shader_stages_r[],
-			      VkExtent2D extent)
+VkPipelineLayout create_graphics_pipeline(VkDevice l_device, VkExtent2D extent)
 {
 	int length_vert;
 	int length_frag;
@@ -436,14 +434,71 @@ void create_graphics_pipeline(VkDevice l_device,
 		.cullMode = VK_CULL_MODE_BACK_BIT,
 		.frontFace = VK_FRONT_FACE_CLOCKWISE,
 		.lineWidth = 1.0f,
-		
+		.depthBiasEnable = VK_FALSE,
+		.depthBiasConstantFactor = 0.0f,
+		.depthBiasClamp = 0.0f,
+		.depthBiasSlopeFactor = 0.0f
+	};
+	
+	VkPipelineMultisampleStateCreateInfo multisampling = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.pNext = 0,
+		.flags = 0,
+		.sampleShadingEnable = VK_FALSE,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+		.minSampleShading = 1.0f,
+		.pSampleMask = 0,
+		.alphaToCoverageEnable = VK_FALSE,
+		.alphaToOneEnable = VK_FALSE,
 	};
 
-	//REST OF THE CODE
+	VkPipelineColorBlendAttachmentState color_blend_attachment = {
+		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | 
+				  VK_COLOR_COMPONENT_G_BIT |
+				  VK_COLOR_COMPONENT_B_BIT |
+				  VK_COLOR_COMPONENT_A_BIT,
+		.blendEnable = VK_FALSE,
+		.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+		.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
+		.colorBlendOp = VK_BLEND_OP_ADD,
+		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+		.alphaBlendOp = VK_BLEND_OP_ADD
+	};
 
+	VkPipelineColorBlendStateCreateInfo color_blending = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.pNext = 0,
+		.flags = 0,
+		.logicOpEnable = VK_FALSE,
+		.logicOp = VK_LOGIC_OP_COPY,
+		.attachmentCount = 1,
+		.pAttachments = &color_blend_attachment,
+		.blendConstants[0] = 0.0f,
+		.blendConstants[1] = 0.0f,
+		.blendConstants[2] = 0.0f,
+		.blendConstants[3] = 0.0f
+	};
+
+	VkPipelineLayout pipeline_layout;
+
+	VkPipelineLayoutCreateInfo pipeline_layout_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.pNext = 0,
+		.flags = 0,
+		.setLayoutCount = 0,
+		.pSetLayouts = 0,
+		.pushConstantRangeCount = 0,
+		.pPushConstantRanges = 0,
+	};
+	//REST OF THE CODE
+	if (vkCreatePipelineLayout(l_device, &pipeline_layout_info, 0, &pipeline_layout) != VK_SUCCESS) {
+		return NULL;
+	};
 	
 	vkDestroyShaderModule(l_device, vert_shader_module, NULL);
 	vkDestroyShaderModule(l_device, frag_shader_module, NULL);
+	return pipeline_layout;
 }
 
 int main()
@@ -517,6 +572,14 @@ int main()
 		return -1;
 	}
 
+	VkPipelineLayout pipeline_layout;
+	pipeline_layout = create_graphics_pipeline(l_device, extent);
+	if(pipeline_layout == NULL) {
+		printf("failed to create pipeline layout!");
+		return -1;
+	}
+	
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 	}
@@ -524,6 +587,8 @@ int main()
 	for (int i = 0; i < swapchain_image_count; i++) {
 		vkDestroyImageView(l_device, image_views[i], NULL);
 	}
+
+	vkDestroyPipelineLayout(l_device, pipeline_layout, NULL);
 	vkDestroySwapchainKHR(l_device, swapchain, NULL);
 	vkDestroySurfaceKHR(instance, surface, NULL);
 	vkDestroyDevice(l_device, NULL);
