@@ -474,10 +474,7 @@ VkPipelineLayout create_graphics_pipeline(VkDevice l_device, VkExtent2D extent)
 		.logicOp = VK_LOGIC_OP_COPY,
 		.attachmentCount = 1,
 		.pAttachments = &color_blend_attachment,
-		.blendConstants[0] = 0.0f,
-		.blendConstants[1] = 0.0f,
-		.blendConstants[2] = 0.0f,
-		.blendConstants[3] = 0.0f
+		.blendConstants =  {0.0f, 0.0f, 0.0f, 0.0f}
 	};
 
 	VkPipelineLayout pipeline_layout;
@@ -491,12 +488,11 @@ VkPipelineLayout create_graphics_pipeline(VkDevice l_device, VkExtent2D extent)
 		.pushConstantRangeCount = 0,
 		.pPushConstantRanges = 0,
 	};
-	//REST OF THE CODE
+
 	if (vkCreatePipelineLayout(l_device, &pipeline_layout_info, 0, &pipeline_layout) != VK_SUCCESS) {
 		return NULL;
 	};
 
-	
 	free(frag_shader_code);
 	free(vert_shader_code);
 	vkDestroyShaderModule(l_device, vert_shader_module, NULL);
