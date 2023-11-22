@@ -21,17 +21,17 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 800;
 
-GLFWwindow* init_window()
+int error_return = 1, success_return = 0;
+
+void init_window(GLFWwindow **window)
 {
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", NULL,
-					      NULL);
-	return window;
+	*window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", NULL, NULL);
 }
 
-VkInstance create_instance()
+int create_instance(VkInstance *instance)
 {
 	VkApplicationInfo application_info = {
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -57,23 +57,22 @@ VkInstance create_instance()
 		.ppEnabledExtensionNames = extension_list
 	};
 	
-	VkInstance instance;
-	if (vkCreateInstance(&create_info, NULL, &instance) != VK_SUCCESS)
-		return NULL;
-	return instance;
+	if (vkCreateInstance(&create_info, NULL, instance) != VK_SUCCESS)
+		return error_return;
+	return success_return;
 }
 
-VkPhysicalDevice pick_physical_device(VkInstance instance)
+int pick_physical_device(VkInstance instance, VkPhysicalDevice *p_device)
 {
 	uint32_t p_device_count = 0;
 	if (vkEnumeratePhysicalDevices(instance, &p_device_count,
 				       NULL) != VK_SUCCESS)
-		return NULL;
+		return error_return;
 
 	VkPhysicalDevice p_device_list[p_device_count];
 	if (vkEnumeratePhysicalDevices(instance, &p_device_count,
 				       p_device_list) != VK_SUCCESS)
-		return NULL;
+		return error_return;
 
 	int best_index = -1;
 	for (int i = 0; i < p_device_count; i++) {
@@ -85,12 +84,13 @@ VkPhysicalDevice pick_physical_device(VkInstance instance)
 		    best_index == -1)
 			best_index = i;
 	}
+	*p_device = p_device_list[best_index];
 	if (best_index != -1)
-		return p_device_list[best_index];
-	return NULL;
+		return success_return;
+	return error_return;
 }
 
-VkDeviceQueueCreateInfo find_queue_families(VkPhysicalDevice p_device)
+int find_queue_families(VkPhysicalDevice p_device, VkDeviceQueueCreateInfo *create_info)
 {
 	uint32_t queue_family_properties_count;
 	vkGetPhysicalDeviceQueueFamilyProperties(p_device,
@@ -115,7 +115,7 @@ VkDeviceQueueCreateInfo find_queue_families(VkPhysicalDevice p_device)
 		queue_priorities[i] = (float)1 / queue_count;
 	}
 
-	VkDeviceQueueCreateInfo create_info = {
+	*create_info = (VkDeviceQueueCreateInfo){
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 		.pNext = 0,
 		.flags = 0,
@@ -123,13 +123,14 @@ VkDeviceQueueCreateInfo find_queue_families(VkPhysicalDevice p_device)
 		.queueCount = queue_count,
 		.pQueuePriorities = queue_priorities
 	};
-	return create_info;
+	return success_return;
 }
 
-VkDevice create_logical_device(VkPhysicalDevice p_device,
+int create_logical_device(VkPhysicalDevice p_device,
 			       VkInstance instance, 
 			       VkDeviceQueueCreateInfo queue_create_info[],
-			       VkPhysicalDeviceFeatures p_device_features)
+			       VkPhysicalDeviceFeatures p_device_features,
+			       VkDevice *l_device)
 {
 	const char *const device_extension_list[] =  {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -147,15 +148,14 @@ VkDevice create_logical_device(VkPhysicalDevice p_device,
 		.ppEnabledExtensionNames = device_extension_list,
 		.pEnabledFeatures = &p_device_features
 	};
-	VkDevice l_device;
-	if (vkCreateDevice(p_device, &create_info, NULL,
-			   &l_device) != VK_SUCCESS)
-		return NULL;
-	return l_device;
+	if (vkCreateDevice(p_device, &create_info, NULL, l_device) != VK_SUCCESS)
+		return error_return;
+	return success_return;
 }
 
-VkSurfaceFormatKHR setting_surface_format(VkPhysicalDevice p_device,
-					  VkSurfaceKHR surface)
+int setting_surface_format(VkPhysicalDevice p_device,
+			   VkSurfaceKHR surface,
+			   VkSurfaceFormatKHR *surface_format)
 {
 	uint32_t surface_format_count;
 	vkGetPhysicalDeviceSurfaceFormatsKHR(p_device, surface,
@@ -166,14 +166,17 @@ VkSurfaceFormatKHR setting_surface_format(VkPhysicalDevice p_device,
 					     surface_formats);
 	for (int i = 0; i < surface_format_count; i++) {
 		if (surface_formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
-		    surface_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-			return surface_formats[i];
+		    surface_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+			*surface_format = surface_formats[i];
+			return success_return;
+		    }
 	}
-	return surface_formats[0];
+	*surface_format = surface_formats[0];
+	return success_return;
 }
 
-VkPresentModeKHR setting_present_mode(VkPhysicalDevice p_device,
-				      VkSurfaceKHR surface)
+int setting_present_mode(VkPhysicalDevice p_device,VkSurfaceKHR surface,
+			 VkPresentModeKHR *present_mode)
 {
 	uint32_t present_mode_count;
 	vkGetPhysicalDeviceSurfacePresentModesKHR(p_device, surface,
@@ -183,25 +186,27 @@ VkPresentModeKHR setting_present_mode(VkPhysicalDevice p_device,
 						  &present_mode_count,
 						  present_modes);
 	for (int i = 0; i < present_mode_count; i++) {
-		if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
-			return VK_PRESENT_MODE_MAILBOX_KHR;
+		if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+			*present_mode =  VK_PRESENT_MODE_MAILBOX_KHR;
+			return success_return;
+		}
 	}
-	return VK_PRESENT_MODE_FIFO_KHR;
+	*present_mode = VK_PRESENT_MODE_FIFO_KHR;
+	return success_return;
 }
 
-VkExtent2D setting_swapchain_extent()
+int setting_swapchain_extent(VkExtent2D *extent)
 {
-	VkExtent2D extent;
-	extent.height = HEIGHT;
-	extent.width = WIDTH;
-	return extent;
+	extent->height = HEIGHT;
+	extent->width = WIDTH;
+	return success_return;
 }
 	
-VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
+int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 				uint32_t queue_family_index, VkDevice l_device,
 				VkSurfaceFormatKHR surface_format, 
 				VkPresentModeKHR present_mode,
-				VkExtent2D extent)
+				VkExtent2D extent, VkSwapchainKHR *swap_chain)
 {
 	VkSurfaceCapabilitiesKHR capabilities;
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(p_device, surface,
@@ -233,13 +238,12 @@ VkSwapchainKHR create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 		.oldSwapchain = VK_NULL_HANDLE
 	};
 
-	VkSwapchainKHR swap_chain;
 	if (vkCreateSwapchainKHR(l_device, &create_info, NULL,
-				 &swap_chain) != VK_SUCCESS) {
-		vkDestroySwapchainKHR(l_device, swap_chain, NULL);
-		return NULL;
+				 swap_chain) != VK_SUCCESS) {
+		vkDestroySwapchainKHR(l_device, *swap_chain, NULL);
+		return error_return;
 	}
-	return swap_chain;
+	return success_return;
 }
 
 int create_image_views(VkDevice l_device, VkImage images[], 
@@ -271,10 +275,10 @@ int create_image_views(VkDevice l_device, VkImage images[],
 		};
 		if (vkCreateImageView(l_device, &create_info, NULL,
 		                      &image_views[i]) != VK_SUCCESS) {
-			return -1;
+			return error_return;
 		}
 	}
-	return 0;
+	return success_return;
 }
 
 
@@ -309,8 +313,8 @@ char *read_file(char *name, int *length)
 	return buffer;
 }
 
-VkShaderModule create_shader_module(VkDevice l_device, const char *code, 
-				    int code_length)
+int create_shader_module(VkDevice l_device, const char *code, int code_length,
+			 VkShaderModule *shader_module)
 {
 	VkShaderModuleCreateInfo create_info = {
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -320,28 +324,30 @@ VkShaderModule create_shader_module(VkDevice l_device, const char *code,
 		.pCode = (uint *)code
 	};
 
-	VkShaderModule shader_module;
 	if (vkCreateShaderModule(l_device, &create_info, NULL, 
-				 &shader_module) != VK_SUCCESS) {
+				 shader_module) != VK_SUCCESS) {
 		printf("Failed to create Shader Module");
-		return NULL;
+		return error_return;
 	}
-	return shader_module;
+	return success_return;
 }
 
-VkPipelineLayout create_graphics_pipeline(VkDevice l_device, VkExtent2D extent)
+int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent, 
+ 			  VkPipelineLayout *pipeline_layout)
 {
 	int length_vert;
 	int length_frag;
 	char *vert_shader_code = read_file("shaders/vert.spv", &length_vert);
+
 	char *frag_shader_code = read_file("shaders/frag.spv", &length_frag);
 
-	VkShaderModule vert_shader_module = create_shader_module(l_device,
-							       vert_shader_code,
-							       length_vert);
-	VkShaderModule frag_shader_module = create_shader_module(l_device,
-	 						       frag_shader_code, 
-							       length_frag);
+	VkShaderModule vert_shader_module;
+	create_shader_module(l_device, vert_shader_code, length_vert,
+			     &vert_shader_module);
+
+	VkShaderModule frag_shader_module;
+	create_shader_module(l_device, frag_shader_code, length_frag,
+			     &frag_shader_module);
 
 	VkPipelineShaderStageCreateInfo vert_shader_stage_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -477,7 +483,6 @@ VkPipelineLayout create_graphics_pipeline(VkDevice l_device, VkExtent2D extent)
 		.blendConstants =  {0.0f, 0.0f, 0.0f, 0.0f}
 	};
 
-	VkPipelineLayout pipeline_layout;
 
 	VkPipelineLayoutCreateInfo pipeline_layout_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -489,46 +494,55 @@ VkPipelineLayout create_graphics_pipeline(VkDevice l_device, VkExtent2D extent)
 		.pPushConstantRanges = 0,
 	};
 
-	if (vkCreatePipelineLayout(l_device, &pipeline_layout_info, 0, &pipeline_layout) != VK_SUCCESS) {
-		return NULL;
+	if (vkCreatePipelineLayout(l_device, &pipeline_layout_info, 0, pipeline_layout) != VK_SUCCESS) {
+		return error_return;
 	};
 
 	free(frag_shader_code);
 	free(vert_shader_code);
 	vkDestroyShaderModule(l_device, vert_shader_module, NULL);
 	vkDestroyShaderModule(l_device, frag_shader_module, NULL);
-	return pipeline_layout;
+
+	return success_return;
 }
 
 int main()
 {
-	GLFWwindow* window = init_window();
+	GLFWwindow* window;
+	init_window(&window);
 
-	VkInstance instance = create_instance();
-	if (instance == NULL) {
+	VkInstance instance;
+	
+	if (create_instance(&instance) != success_return) {
 		printf("Unable to create instance Aborting");
-		return -1;
+		return error_return;
 	}
 
-	VkPhysicalDevice p_device = pick_physical_device(instance);
+	VkPhysicalDevice p_device;
+	if (pick_physical_device(instance, &p_device) != success_return) {
+		printf("Unable to pick device! Aborting");
+		return error_return;
+	}
 	VkPhysicalDeviceFeatures p_device_features;
 	vkGetPhysicalDeviceFeatures(p_device, &p_device_features);
 	VkPhysicalDeviceProperties p_device_properties;
 	vkGetPhysicalDeviceProperties(p_device, &p_device_properties);
-	if (p_device == NULL) {
-		printf("Unable to pick device! Aborting");
-		return -1;
+
+	
+
+	VkDeviceQueueCreateInfo queue_create_info;
+	if(find_queue_families(p_device, &queue_create_info) != success_return) {
+		printf("Failed to find appropriate queue families");
+		return error_return;
 	}
 
-	VkDeviceQueueCreateInfo queue_create_info = find_queue_families(p_device);
-
-	VkDevice l_device = create_logical_device(p_device, instance,
-						  &queue_create_info,
-						  p_device_features);
-	if (l_device == NULL) {
+	VkDevice l_device;
+	if(create_logical_device(p_device, instance, &queue_create_info,
+			      p_device_features, &l_device) != success_return) {
 		printf("Failed to create logical device! Aborting");
-		return -1;
+		return error_return;
 	}
+	
 
 	VkQueue queues[queue_create_info.queueCount];
 	for (int i = 0; i < queue_create_info.queueCount; i++) {
@@ -540,44 +554,46 @@ int main()
 	if (glfwCreateWindowSurface(instance, window, NULL,
 				    &surface) != VK_SUCCESS) {
 		printf("Failed to create window surface!");
-		return -1;
+		return error_return;
 	}
 
-	VkSurfaceFormatKHR surface_format = setting_surface_format(p_device,
-								   surface);
-	VkPresentModeKHR present_mode = setting_present_mode(p_device, surface);
-	VkExtent2D extent = setting_swapchain_extent();
-	VkSwapchainKHR swapchain = create_swapchain(p_device, surface,
-						    queue_create_info.queueFamilyIndex,
-						    l_device, surface_format, 
-						    present_mode, extent);
-	if (swapchain == NULL) {
+	VkSurfaceFormatKHR surface_format;
+	setting_surface_format(p_device, surface, &surface_format);
+
+	VkPresentModeKHR present_mode;
+	setting_present_mode(p_device, surface, &present_mode);
+
+	VkExtent2D extent;
+	setting_swapchain_extent(&extent);
+
+	VkSwapchainKHR swap_chain;
+	if (create_swapchain(p_device, surface, queue_create_info.queueFamilyIndex,
+			     l_device, surface_format, present_mode, extent,
+			     &swap_chain) != success_return) {
 		printf("Failed to create swap chain! Aborting");
-		return -1;
+		return error_return;
 	}
 
 	uint32_t swapchain_image_count;
-	vkGetSwapchainImagesKHR(l_device, swapchain, &swapchain_image_count,
+	vkGetSwapchainImagesKHR(l_device, swap_chain, &swapchain_image_count,
 				NULL);
 	VkImage swapchain_images[swapchain_image_count];
-	vkGetSwapchainImagesKHR(l_device, swapchain, &swapchain_image_count,
+	vkGetSwapchainImagesKHR(l_device, swap_chain, &swapchain_image_count,
 				swapchain_images);
 
 	VkImageView image_views[swapchain_image_count];
 	if (create_image_views(l_device, swapchain_images,
 			       swapchain_image_count, surface_format,
-			       image_views) != 0) {
+			       image_views) != success_return) {
 		printf("Failed to create Image Views");
-		return -1;
+		return error_return;
 	}
 
 	VkPipelineLayout pipeline_layout;
-	pipeline_layout = create_graphics_pipeline(l_device, extent);
-	if(pipeline_layout == NULL) {
-		printf("failed to create pipeline layout!");
-		return -1;
+	if(create_graphics_pipeline(l_device, extent, &pipeline_layout) != success_return) {
+		printf("Failed to create pipeline layout!");
+		return error_return;
 	}
-	
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -588,7 +604,7 @@ int main()
 	}
 
 	vkDestroyPipelineLayout(l_device, pipeline_layout, NULL);
-	vkDestroySwapchainKHR(l_device, swapchain, NULL);
+	vkDestroySwapchainKHR(l_device, swap_chain, NULL);
 	vkDestroySurfaceKHR(instance, surface, NULL);
 	vkDestroyDevice(l_device, NULL);
 	vkDestroyInstance(instance, NULL);
