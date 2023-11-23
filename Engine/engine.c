@@ -206,7 +206,7 @@ int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 				uint32_t queue_family_index, VkDevice l_device,
 				VkSurfaceFormatKHR surface_format, 
 				VkPresentModeKHR present_mode,
-				VkExtent2D extent, VkSwapchainKHR *swap_chain)
+				VkExtent2D extent, VkSwapchainKHR *swapchain)
 {
 	VkSurfaceCapabilitiesKHR capabilities;
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(p_device, surface,
@@ -239,8 +239,8 @@ int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	};
 
 	if (vkCreateSwapchainKHR(l_device, &create_info, NULL,
-				 swap_chain) != VK_SUCCESS) {
-		vkDestroySwapchainKHR(l_device, *swap_chain, NULL);
+				 swapchain) != VK_SUCCESS) {
+		vkDestroySwapchainKHR(l_device, *swapchain, NULL);
 		return error_return;
 	}
 	return success_return;
@@ -591,6 +591,35 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 	return success_return;
 }
 
+int create_framebuffer(int swapchain_image_count, VkImageView image_views[],
+			VkExtent2D extent, VkRenderPass render_pass,
+			VkDevice l_device, VkFramebuffer swapchain_framebuffers[])
+{
+	for(int i = 0; i < swapchain_image_count; i++) {
+		VkImageView attachments[] = {
+			image_views[i]
+		};
+
+		VkFramebufferCreateInfo framebuffer_info = {
+			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+			.pNext = NULL,
+			.flags = 0,
+			.renderPass = render_pass,
+			.attachmentCount = 1,
+			.pAttachments = attachments,
+			.width = extent.width,
+			.height = extent.height,
+			.layers = 1
+		};
+		if(vkCreateFramebuffer(l_device, &framebuffer_info, 0,
+		  		       &swapchain_framebuffers[i]) != VK_SUCCESS) {
+			printf("Failed to create framebuffer!");
+			return error_return;
+		}
+	}
+	return success_return;
+}
+
 int main()
 {
 	GLFWwindow* window;
@@ -651,19 +680,19 @@ int main()
 	VkExtent2D extent;
 	setting_swapchain_extent(&extent);
 
-	VkSwapchainKHR swap_chain;
+	VkSwapchainKHR swapchain;
 	if (create_swapchain(p_device, surface, queue_create_info.queueFamilyIndex,
 			     l_device, surface_format, present_mode, extent,
-			     &swap_chain) != success_return) {
+			     &swapchain) != success_return) {
 		printf("Failed to create swap chain! Aborting");
 		return error_return;
 	}
 
 	uint32_t swapchain_image_count;
-	vkGetSwapchainImagesKHR(l_device, swap_chain, &swapchain_image_count,
+	vkGetSwapchainImagesKHR(l_device, swapchain, &swapchain_image_count,
 				NULL);
 	VkImage swapchain_images[swapchain_image_count];
-	vkGetSwapchainImagesKHR(l_device, swap_chain, &swapchain_image_count,
+	vkGetSwapchainImagesKHR(l_device, swapchain, &swapchain_image_count,
 				swapchain_images);
 
 	VkImageView image_views[swapchain_image_count];
@@ -689,22 +718,35 @@ int main()
 		return error_return;
 	}
 
+	VkFramebuffer swapchain_framebuffers[swapchain_image_count];
+	if(create_framebuffer(swapchain_image_count, image_views, extent,
+			       render_pass, l_device, swapchain_framebuffers)) {
+		return error_return;
+	}
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 	}
 	vkDeviceWaitIdle(l_device);
 
-	for (int i = 0; i < swapchain_image_count; i++) {
-		vkDestroyImageView(l_device, image_views[i], NULL);
+	for(int i = 0; i < swapchain_image_count; i++) {
+		vkDestroyFramebuffer(l_device, swapchain_framebuffers[i], NULL);
 	}
 
 	vkDestroyPipeline(l_device, graphics_pipeline, NULL);
 	vkDestroyPipelineLayout(l_device, pipeline_layout, NULL);
 	vkDestroyRenderPass(l_device, render_pass, NULL);
-	vkDestroySwapchainKHR(l_device, swap_chain, NULL);
-	vkDestroySurfaceKHR(instance, surface, NULL);
+
+	for (int i = 0; i < swapchain_image_count; i++) {
+		vkDestroyImageView(l_device, image_views[i], NULL);
+	}
+
+	vkDestroySwapchainKHR(l_device, swapchain, NULL);
 	vkDestroyDevice(l_device, NULL);
+	vkDestroySurfaceKHR(instance, surface, NULL);
 	vkDestroyInstance(instance, NULL);
+
 	glfwDestroyWindow(window);
+
 	glfwTerminate();
 }
