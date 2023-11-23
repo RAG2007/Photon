@@ -545,7 +545,7 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 		.setLayoutCount = 0,
 		.pSetLayouts = NULL,
 		.pushConstantRangeCount = 0,
-		.pPushConstantRanges = NULL,
+		.pPushConstantRanges = NULL
 	};
 
 	if (vkCreatePipelineLayout(l_device, &pipeline_layout_info, NULL,
