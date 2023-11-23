@@ -692,6 +692,7 @@ int main()
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 	}
+	vkDeviceWaitIdle(l_device);
 
 	for (int i = 0; i < swapchain_image_count; i++) {
 		vkDestroyImageView(l_device, image_views[i], NULL);
