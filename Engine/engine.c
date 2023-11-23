@@ -35,7 +35,7 @@ int create_instance(VkInstance *instance)
 {
 	VkApplicationInfo application_info = {
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.pApplicationName = "Photon",
 		.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
 		.pEngineName = "Itself",
@@ -48,11 +48,11 @@ int create_instance(VkInstance *instance)
 
 	VkInstanceCreateInfo create_info = {
 		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.pApplicationInfo = &application_info,
 		.enabledLayerCount = 0,
-		.ppEnabledLayerNames = 0,
+		.ppEnabledLayerNames = NULL,
 		.enabledExtensionCount = extension_count,
 		.ppEnabledExtensionNames = extension_list
 	};
@@ -117,7 +117,7 @@ int find_queue_families(VkPhysicalDevice p_device, VkDeviceQueueCreateInfo *crea
 
 	*create_info = (VkDeviceQueueCreateInfo){
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.queueFamilyIndex = queue_family_index,
 		.queueCount = queue_count,
@@ -138,12 +138,12 @@ int create_logical_device(VkPhysicalDevice p_device,
 
 	VkDeviceCreateInfo create_info = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.queueCreateInfoCount = 1,
 		.pQueueCreateInfos = queue_create_info,
 		.enabledLayerCount = 0,
-		.ppEnabledLayerNames = 0,
+		.ppEnabledLayerNames = NULL,
 		.enabledExtensionCount = 1,
 		.ppEnabledExtensionNames = device_extension_list,
 		.pEnabledFeatures = &p_device_features
@@ -219,7 +219,7 @@ int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	
 	VkSwapchainCreateInfoKHR create_info = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.surface = surface,
 		.minImageCount = imageCount,
@@ -230,7 +230,7 @@ int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.queueFamilyIndexCount = 0,
-		.pQueueFamilyIndices = 0,
+		.pQueueFamilyIndices = NULL,
 		.preTransform = capabilities.currentTransform,
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 		.presentMode = present_mode,
@@ -254,7 +254,7 @@ int create_image_views(VkDevice l_device, VkImage images[],
 	for (size_t i = 0; i < swapchain_image_count; i++) {
 		VkImageViewCreateInfo create_info = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.pNext = 0,
+			.pNext = NULL,
 			.flags = 0,
 			.image = images[i],
 			.viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -318,7 +318,7 @@ int create_shader_module(VkDevice l_device, const char *code, int code_length,
 {
 	VkShaderModuleCreateInfo create_info = {
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.codeSize = code_length,
 		.pCode = (uint *)code
@@ -332,8 +332,62 @@ int create_shader_module(VkDevice l_device, const char *code, int code_length,
 	return success_return;
 }
 
-int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent, 
- 			  VkPipelineLayout *pipeline_layout)
+int create_render_pass(VkSurfaceFormatKHR surface_format, VkDevice l_device,
+		       VkRenderPass *render_pass)
+{
+	VkAttachmentDescription color_attachment = {
+		.flags = 0,
+		.format = surface_format.format,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	};
+
+	VkAttachmentReference color_attachment_ref = {
+		.attachment = 0,
+		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	};
+
+	VkSubpassDescription subpass = {
+		.flags = 0,
+		.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+		.inputAttachmentCount = 0,
+		.pInputAttachments = 0,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &color_attachment_ref,
+		.pResolveAttachments = NULL,
+		.pDepthStencilAttachment = NULL,
+		.preserveAttachmentCount = 0,
+		.pPreserveAttachments = NULL
+	};
+
+	VkRenderPassCreateInfo render_pass_info = {
+		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0,
+		.attachmentCount = 1,
+		.pAttachments = &color_attachment,
+		.subpassCount = 1,
+		.pSubpasses = &subpass,
+		.dependencyCount = 0,
+		.pDependencies = NULL
+	};
+
+	if (vkCreateRenderPass(l_device, &render_pass_info, NULL, render_pass) !=
+			       VK_SUCCESS) {
+		return error_return;
+	}
+	return success_return;
+}
+
+int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
+			     VkRenderPass render_pass,
+			     VkPipelineLayout *pipeline_layout,
+			     VkPipeline *graphics_pipeline)
 {
 	int length_vert;
 	int length_frag;
@@ -351,23 +405,23 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 
 	VkPipelineShaderStageCreateInfo vert_shader_stage_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.stage = VK_SHADER_STAGE_VERTEX_BIT,
 		.module = vert_shader_module,
 		.pName = "main",
-		.pSpecializationInfo = 0
+		.pSpecializationInfo = NULL
 	};
 
 
 	VkPipelineShaderStageCreateInfo frag_shader_stage_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 		.module = frag_shader_module,
 		.pName = "main",
-		.pSpecializationInfo = 0
+		.pSpecializationInfo = NULL
 	};
 
 	VkPipelineShaderStageCreateInfo shader_stages[] = {
@@ -382,7 +436,7 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 
 	VkPipelineDynamicStateCreateInfo dynamic_state = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.dynamicStateCount = 2,
 		.pDynamicStates = dynamic_states
@@ -390,17 +444,17 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 
 	VkPipelineVertexInputStateCreateInfo vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.vertexBindingDescriptionCount = 0,
-		.pVertexBindingDescriptions = 0,
+		.pVertexBindingDescriptions = NULL,
 		.vertexAttributeDescriptionCount = 0,
-		.pVertexAttributeDescriptions = 0
+		.pVertexAttributeDescriptions = NULL
 	};
 
 	VkPipelineInputAssemblyStateCreateInfo input_assembly = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 		.primitiveRestartEnable = VK_TRUE
@@ -422,7 +476,7 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 
 	VkPipelineViewportStateCreateInfo viewport_state = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.viewportCount = 1,
 		.pViewports = &viewport,
@@ -432,7 +486,7 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 
 	VkPipelineRasterizationStateCreateInfo rasterizer = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.depthClampEnable = VK_FALSE,
 		.rasterizerDiscardEnable = VK_FALSE,
@@ -448,12 +502,12 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 	
 	VkPipelineMultisampleStateCreateInfo multisampling = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.sampleShadingEnable = VK_FALSE,
 		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 		.minSampleShading = 1.0f,
-		.pSampleMask = 0,
+		.pSampleMask = NULL,
 		.alphaToCoverageEnable = VK_FALSE,
 		.alphaToOneEnable = VK_FALSE,
 	};
@@ -474,7 +528,7 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 
 	VkPipelineColorBlendStateCreateInfo color_blending = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.logicOpEnable = VK_FALSE,
 		.logicOp = VK_LOGIC_OP_COPY,
@@ -486,41 +540,54 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 
 	VkPipelineLayoutCreateInfo pipeline_layout_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.pNext = 0,
+		.pNext = NULL,
 		.flags = 0,
 		.setLayoutCount = 0,
-		.pSetLayouts = 0,
+		.pSetLayouts = NULL,
 		.pushConstantRangeCount = 0,
-		.pPushConstantRanges = 0,
+		.pPushConstantRanges = NULL,
 	};
 
-	if (vkCreatePipelineLayout(l_device, &pipeline_layout_info, 0, pipeline_layout) != VK_SUCCESS) {
+	if (vkCreatePipelineLayout(l_device, &pipeline_layout_info, NULL,
+				   pipeline_layout) != VK_SUCCESS) {
+		printf("Failed to create pipeline layout!");
 		return error_return;
 	};
+
+	VkGraphicsPipelineCreateInfo pipeline_info = {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0,
+		.stageCount = 2,
+		.pStages = shader_stages,
+		.pVertexInputState = &vertex_input_info,
+		.pInputAssemblyState = &input_assembly,
+		.pTessellationState = NULL,
+		.pViewportState = &viewport_state,
+		.pRasterizationState = &rasterizer,
+		.pMultisampleState = &multisampling,
+		.pDepthStencilState = NULL,
+		.pColorBlendState = &color_blending,
+		.pDynamicState = &dynamic_state,
+		.layout = *pipeline_layout,
+		.renderPass = render_pass,
+		.subpass = 0,
+		.basePipelineHandle = VK_NULL_HANDLE,
+		.basePipelineIndex = -1
+	};
+
+	if (vkCreateGraphicsPipelines(l_device, VK_NULL_HANDLE, 1,
+				      &pipeline_info, NULL, graphics_pipeline)
+	    != VK_SUCCESS) {
+		printf("failed to create graphics pipeline!");
+		return error_return;
+	}
 
 	free(frag_shader_code);
 	free(vert_shader_code);
 	vkDestroyShaderModule(l_device, vert_shader_module, NULL);
 	vkDestroyShaderModule(l_device, frag_shader_module, NULL);
 
-	return success_return;
-}
-
-int create_render_pass(VkSurfaceFormatKHR surface_format) {
-	VkAttachmentDescription color_attachment = {
-		.format = surface_format.format,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-	};
-
-	VkAttachmentReference color_attachment_ref = {
-
-	};
 	return success_return;
 }
 
@@ -607,9 +674,18 @@ int main()
 		return error_return;
 	}
 
+	VkRenderPass render_pass;
+	if(create_render_pass(surface_format, l_device, &render_pass) !=
+	   success_return) {
+		printf("failed to create render pass!");
+		return error_return;
+	}
+
 	VkPipelineLayout pipeline_layout;
-	if(create_graphics_pipeline(l_device, extent, &pipeline_layout) != success_return) {
-		printf("Failed to create pipeline layout!");
+	VkPipeline graphics_pipeline;
+	if(create_graphics_pipeline(l_device, extent, render_pass,
+				    &pipeline_layout, &graphics_pipeline)
+	   != success_return) {
 		return error_return;
 	}
 
@@ -621,7 +697,9 @@ int main()
 		vkDestroyImageView(l_device, image_views[i], NULL);
 	}
 
+	vkDestroyPipeline(l_device, graphics_pipeline, NULL);
 	vkDestroyPipelineLayout(l_device, pipeline_layout, NULL);
+	vkDestroyRenderPass(l_device, render_pass, NULL);
 	vkDestroySwapchainKHR(l_device, swap_chain, NULL);
 	vkDestroySurfaceKHR(instance, surface, NULL);
 	vkDestroyDevice(l_device, NULL);
