@@ -620,6 +620,56 @@ int create_framebuffer(int swapchain_image_count, VkImageView image_views[],
 	return success_return;
 }
 
+int create_command_pool(VkDevice l_device, 
+			VkDeviceQueueCreateInfo queue_create_info,
+			VkCommandPool *command_pool)
+{
+	VkCommandPoolCreateInfo command_pool_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0,
+		.queueFamilyIndex = queue_create_info.queueFamilyIndex
+	};
+
+	if (vkCreateCommandPool(l_device, &command_pool_info, NULL, command_pool)
+	    != VK_SUCCESS) {
+		printf("Failed to create command pool");
+	    	return error_return;
+	}
+	return success_return;
+}
+
+int create_command_buffer(VkDevice l_device, VkCommandPool command_pool,
+			  VkCommandBuffer *command_buffer) {
+	VkCommandBufferAllocateInfo alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.pNext = NULL,
+		.commandPool = command_pool,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandBufferCount = 1
+	};
+	if (vkAllocateCommandBuffers(l_device, &alloc_info, command_buffer) !=
+	    VK_SUCCESS) {
+		printf("Failed to create command buffer");
+		return error_return;
+	}
+	return success_return;
+}
+
+int record_command_buffer(VkCommandBuffer command_buffer) {
+	VkCommandBufferBeginInfo begin_info = {
+		.sType =  VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.pNext = NULL,
+		.flags = 0,
+		.pInheritanceInfo = NULL,
+	};
+	if(vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
+		printf("Failed to create begin recording command buffer!");
+		return error_return;
+	}
+	return success_return;
+}
+
 int main()
 {
 	GLFWwindow* window;
@@ -724,11 +774,23 @@ int main()
 		return error_return;
 	}
 
+	VkCommandPool command_pool;
+	if(create_command_pool(l_device, queue_create_info, &command_pool)
+	   != success_return) {
+		return error_return;
+	}
+
+	VkCommandBuffer command_buffer;
+	if(create_command_buffer(l_device, command_pool, &command_buffer)) {
+		return error_return;
+	}
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 	}
 	vkDeviceWaitIdle(l_device);
 
+	vkDestroyCommandPool(l_device, command_pool, NULL);
 	for(int i = 0; i < swapchain_image_count; i++) {
 		vkDestroyFramebuffer(l_device, swapchain_framebuffers[i], NULL);
 	}
