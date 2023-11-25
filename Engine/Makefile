@@ -1,4 +1,4 @@
-CFLAGS = -g -O3
+CFLAGS = -g -O3 -fsanitize=address,undefined
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
 VulkanTest: engine.c
