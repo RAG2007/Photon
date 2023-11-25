@@ -31,7 +31,7 @@ void init_window(GLFWwindow **window)
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	*window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", NULL, NULL);
+	*window = glfwCreateWindow(WIDTH, HEIGHT, "Photon", NULL, NULL);
 }
 
 int create_instance(VkInstance *instance)
@@ -118,7 +118,7 @@ int find_queue_families(VkPhysicalDevice p_device, VkDeviceQueueCreateInfo *crea
 		queue_priorities[i] = (float)1 / queue_count;
 	}
 
-	*create_info = (VkDeviceQueueCreateInfo){
+	*create_info = (VkDeviceQueueCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
