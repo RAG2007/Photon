@@ -65,7 +65,7 @@ int create_instance(VkInstance *instance)
 		.enabledExtensionCount = extension_count,
 		.ppEnabledExtensionNames = extension_list
 	};
-	
+
 	if (vkCreateInstance(&create_info, NULL, instance) != VK_SUCCESS)
 		return error_return;
 	return success_return;
@@ -93,7 +93,7 @@ int pick_physical_device(VkInstance instance, VkPhysicalDevice *p_device)
 		if (p_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU && best_index == -1)
 			best_index = i;
 	}
-	
+
 	if (best_index == -1)
 		return error_return;
 	*p_device = p_device_list[best_index];
@@ -101,16 +101,16 @@ int pick_physical_device(VkInstance instance, VkPhysicalDevice *p_device)
 }
 
 int find_queue_families(VkPhysicalDevice p_device, VkSurfaceKHR surface,
-			VkDeviceQueueCreateInfo *graphics_queue_create_info, 
+			VkDeviceQueueCreateInfo *graphics_queue_create_info,
 			VkDeviceQueueCreateInfo *present_queue_create_info)
-{	
+{
 	uint32_t queue_families_count;
 	vkGetPhysicalDeviceQueueFamilyProperties(p_device,
 						 &queue_families_count,
 						 NULL);
 
 	VkQueueFamilyProperties queue_family_properties[queue_families_count];
-	vkGetPhysicalDeviceQueueFamilyProperties(p_device, 
+	vkGetPhysicalDeviceQueueFamilyProperties(p_device,
 						 &queue_families_count,
 						 queue_family_properties);
 	struct queue_family_indices indices;
@@ -131,7 +131,6 @@ int find_queue_families(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 		}
 	}
 	printf("%d %d\n", indices.graphics_family, indices.present_family);
-	uint32_t queue_count = queue_family_properties[indices.graphics_family].queueCount;
 	float queue_priorities = 1;
 
 	*graphics_queue_create_info = (VkDeviceQueueCreateInfo) {
@@ -154,7 +153,8 @@ int find_queue_families(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 }
 
 int create_logical_device(VkPhysicalDevice p_device,
-			       VkInstance instance, 
+			       VkInstance instance,
+			       int queue_count,
 			       VkDeviceQueueCreateInfo queue_create_infos[],
 			       VkPhysicalDeviceFeatures p_device_features,
 			       VkDevice *l_device)
@@ -167,7 +167,7 @@ int create_logical_device(VkPhysicalDevice p_device,
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
-		.queueCreateInfoCount = 2,
+		.queueCreateInfoCount = queue_count,
 		.pQueueCreateInfos = queue_create_infos,
 		.enabledLayerCount = 0,
 		.ppEnabledLayerNames = NULL,
@@ -188,7 +188,7 @@ int setting_surface_format(VkPhysicalDevice p_device,
 	vkGetPhysicalDeviceSurfaceFormatsKHR(p_device, surface,
 					     &surface_format_count, NULL);
 	VkSurfaceFormatKHR surface_formats[surface_format_count];
-	vkGetPhysicalDeviceSurfaceFormatsKHR(p_device, surface, 
+	vkGetPhysicalDeviceSurfaceFormatsKHR(p_device, surface,
 					     &surface_format_count,
 					     surface_formats);
 	for (int i = 0; i < surface_format_count; i++) {
@@ -209,7 +209,7 @@ int setting_present_mode(VkPhysicalDevice p_device,VkSurfaceKHR surface,
 	vkGetPhysicalDeviceSurfacePresentModesKHR(p_device, surface,
 						  &present_mode_count, NULL);
 	VkPresentModeKHR present_modes[present_mode_count];
-	vkGetPhysicalDeviceSurfacePresentModesKHR(p_device, surface, 
+	vkGetPhysicalDeviceSurfacePresentModesKHR(p_device, surface,
 						  &present_mode_count,
 						  present_modes);
 	for (int i = 0; i < present_mode_count; i++) {
@@ -228,10 +228,10 @@ int setting_swapchain_extent(VkExtent2D *extent)
 	extent->width = WIDTH;
 	return success_return;
 }
-	
+
 int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 				VkDeviceQueueCreateInfo queue_create_infos[], VkDevice l_device,
-				VkSurfaceFormatKHR surface_format, 
+				VkSurfaceFormatKHR surface_format,
 				VkPresentModeKHR present_mode,
 				VkExtent2D extent, VkSwapchainKHR *swapchain)
 {
@@ -243,7 +243,7 @@ int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	if (imageCount > capabilities.maxImageCount &&
 	    capabilities.maxImageCount != 0)
 		imageCount = capabilities.maxImageCount;
-	
+
 	VkSwapchainCreateInfoKHR create_info = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.pNext = NULL,
@@ -267,10 +267,10 @@ int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	queue_families_indices[0] = queue_create_infos[0].queueFamilyIndex;
 	queue_families_indices[1] = queue_create_infos[1].queueFamilyIndex;
 
-	if (queue_create_infos[0].queueFamilyIndex == queue_create_infos[1].queueFamilyIndex) {
-            create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-            create_info.queueFamilyIndexCount = 2;
-            create_info.pQueueFamilyIndices = queue_families_indices;
+	if (queue_create_infos[0].queueFamilyIndex != queue_create_infos[1].queueFamilyIndex) {
+        	create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        	create_info.queueFamilyIndexCount = 2;
+        	create_info.pQueueFamilyIndices = queue_families_indices;
         } else {
 		create_info.queueFamilyIndexCount = 1,
 		create_info.pQueueFamilyIndices = &queue_families_indices[0];
@@ -284,7 +284,7 @@ int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	return success_return;
 }
 
-int create_image_views(VkDevice l_device, VkImage images[], 
+int create_image_views(VkDevice l_device, VkImage images[],
 		       uint32_t swapchain_image_count,
 		       VkSurfaceFormatKHR surface_format,
 		       VkImageView image_views[])
@@ -362,7 +362,7 @@ int create_shader_module(VkDevice l_device, const char *code, int code_length,
 		.pCode = (uint *)code
 	};
 
-	if (vkCreateShaderModule(l_device, &create_info, NULL, 
+	if (vkCreateShaderModule(l_device, &create_info, NULL,
 				 shader_module) != VK_SUCCESS) {
 		printf("Failed to create Shader Module");
 		return error_return;
@@ -424,7 +424,7 @@ int create_render_pass(VkSurfaceFormatKHR surface_format, VkDevice l_device,
 		.dependencyCount = 1,
 		.pDependencies = &dependency
 	};
-	
+
 
 	if (vkCreateRenderPass(l_device, &render_pass_info, NULL, render_pass) !=
 			       VK_SUCCESS) {
@@ -548,7 +548,7 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 		.depthBiasClamp = 0.0f,
 		.depthBiasSlopeFactor = 0.0f
 	};
-	
+
 	VkPipelineMultisampleStateCreateInfo multisampling = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 		.pNext = NULL,
@@ -562,7 +562,7 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 	};
 
 	VkPipelineColorBlendAttachmentState color_blend_attachment = {
-		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | 
+		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
 				  VK_COLOR_COMPONENT_G_BIT |
 				  VK_COLOR_COMPONENT_B_BIT |
 				  VK_COLOR_COMPONENT_A_BIT,
@@ -668,7 +668,7 @@ int create_framebuffers(int swapchain_image_count, VkImageView image_views[],
 	return success_return;
 }
 
-int create_command_pool(VkDevice l_device, 
+int create_command_pool(VkDevice l_device,
 			VkDeviceQueueCreateInfo queue_create_info,
 			VkCommandPool *command_pool)
 {
@@ -795,14 +795,14 @@ int create_sync_objects(VkSemaphore image_availabe_semaphores[],
 
 int draw_frame(VkDevice l_device, VkSemaphore image_available_semaphores[],
 	       VkSemaphore render_finished_semaphores[], VkFence in_flight_fences[],
-	       VkSwapchainKHR swapchain, VkCommandBuffer command_buffers[], 
+	       VkSwapchainKHR swapchain, VkCommandBuffer command_buffers[],
 	       VkRenderPass render_pass, VkExtent2D extent,
 	       VkPipeline graphics_pipeline, VkFramebuffer framebuffers[],
 	       VkQueue graphics_queue, VkQueue present_queue, uint32_t current_frame)
 {
 	vkWaitForFences(l_device, 1, &in_flight_fences[current_frame], VK_TRUE, UINT64_MAX);
 	vkResetFences(l_device, 1, &in_flight_fences[current_frame]);
-	
+
 	uint32_t image_index;
 	vkAcquireNextImageKHR(l_device, swapchain, UINT64_MAX,
 			      image_available_semaphores[current_frame], VK_NULL_HANDLE,
@@ -811,7 +811,7 @@ int draw_frame(VkDevice l_device, VkSemaphore image_available_semaphores[],
 	vkResetCommandBuffer(command_buffers[current_frame], 0);
 	record_command_buffer(command_buffers[current_frame], render_pass, framebuffers,
 			      image_index, extent, graphics_pipeline);
-	
+
 	VkSemaphore wait_semaphores[] = {image_available_semaphores[current_frame]};
 	VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 	VkSemaphore signal_semaphores[] = {render_finished_semaphores[current_frame]};
@@ -886,8 +886,10 @@ int main()
 		return error_return;
 	}
 
+	int queue_count = queue_create_infos[0].queueFamilyIndex == queue_create_infos[1].queueFamilyIndex ? 1 : 2;
+
 	VkDevice l_device;
-	if(create_logical_device(p_device, instance, queue_create_infos,
+	if(create_logical_device(p_device, instance, queue_count, queue_create_infos,
 			      p_device_features, &l_device) != success_return) {
 		printf("Failed to create logical device! Aborting");
 		return error_return;
@@ -899,7 +901,7 @@ int main()
 	VkQueue present_queue;
 	vkGetDeviceQueue(l_device, queue_create_infos[1].queueFamilyIndex, 0,
 			 &present_queue);
-	
+
 	VkSurfaceFormatKHR surface_format;
 	setting_surface_format(p_device, surface, &surface_format);
 
@@ -1008,7 +1010,7 @@ int main()
 	vkDestroyCommandPool(l_device, command_pool, NULL);
 
 	vkDestroyDevice(l_device, NULL);
-	
+
 	vkDestroySurfaceKHR(instance, surface, NULL);
 
 	vkDestroyInstance(instance, NULL);
