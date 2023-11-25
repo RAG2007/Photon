@@ -20,7 +20,7 @@
 #include <GLFW/glfw3native.h>
 
 const uint32_t WIDTH = 800;
-const uint32_t HEIGHT = 800;
+const uint32_t HEIGHT = 600;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -90,7 +90,7 @@ int pick_physical_device(VkInstance instance, VkPhysicalDevice *p_device)
 		printf("%d\n", p_device_properties.deviceType);
 		if (p_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 			best_index = i;
-		if (p_device_properties.deviceType != VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU && best_index == -1)
+		if (p_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU && best_index == -1)
 			best_index = i;
 	}
 	
@@ -132,31 +132,30 @@ int find_queue_families(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 	}
 	printf("%d %d\n", indices.graphics_family, indices.present_family);
 	uint32_t queue_count = queue_family_properties[indices.graphics_family].queueCount;
-	float queue_priorities[queue_count];
-	queue_priorities[0] = (float)1;
+	float queue_priorities = 1;
 
 	*graphics_queue_create_info = (VkDeviceQueueCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
 		.queueFamilyIndex = indices.graphics_family,
-		.queueCount = queue_count,
-		.pQueuePriorities = queue_priorities
+		.queueCount = 1,
+		.pQueuePriorities = &queue_priorities
 	};
 	*present_queue_create_info = (VkDeviceQueueCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
 		.queueFamilyIndex = indices.present_family,
-		.queueCount = queue_family_properties[indices.graphics_family].queueCount,
-		.pQueuePriorities = queue_priorities
+		.queueCount = 1,
+		.pQueuePriorities = &queue_priorities
 	};
 	return success_return;
 }
 
 int create_logical_device(VkPhysicalDevice p_device,
 			       VkInstance instance, 
-			       VkDeviceQueueCreateInfo queue_create_info[],
+			       VkDeviceQueueCreateInfo queue_create_infos[],
 			       VkPhysicalDeviceFeatures p_device_features,
 			       VkDevice *l_device)
 {
@@ -168,8 +167,8 @@ int create_logical_device(VkPhysicalDevice p_device,
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
-		.queueCreateInfoCount = 1,
-		.pQueueCreateInfos = queue_create_info,
+		.queueCreateInfoCount = 2,
+		.pQueueCreateInfos = queue_create_infos,
 		.enabledLayerCount = 0,
 		.ppEnabledLayerNames = NULL,
 		.enabledExtensionCount = 1,
@@ -231,7 +230,7 @@ int setting_swapchain_extent(VkExtent2D *extent)
 }
 	
 int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
-				uint32_t queue_family_index, VkDevice l_device,
+				VkDeviceQueueCreateInfo queue_create_infos[], VkDevice l_device,
 				VkSurfaceFormatKHR surface_format, 
 				VkPresentModeKHR present_mode,
 				VkExtent2D extent, VkSwapchainKHR *swapchain)
@@ -255,16 +254,27 @@ int create_swapchain(VkPhysicalDevice p_device, VkSurfaceKHR surface,
 		.imageColorSpace = surface_format.colorSpace,
 		.imageExtent = extent,
 		.imageArrayLayers = 1,
-		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.queueFamilyIndexCount = 0,
-		.pQueueFamilyIndices = NULL,
+		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		.preTransform = capabilities.currentTransform,
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 		.presentMode = present_mode,
 		.clipped = VK_TRUE,
 		.oldSwapchain = VK_NULL_HANDLE
 	};
+
+	uint32_t queue_families_indices[2];
+	queue_families_indices[0] = queue_create_infos[0].queueFamilyIndex;
+	queue_families_indices[1] = queue_create_infos[1].queueFamilyIndex;
+
+	if (queue_create_infos[0].queueFamilyIndex == queue_create_infos[1].queueFamilyIndex) {
+            create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+            create_info.queueFamilyIndexCount = 2;
+            create_info.pQueueFamilyIndices = queue_families_indices;
+        } else {
+		create_info.queueFamilyIndexCount = 1,
+		create_info.pQueueFamilyIndices = &queue_families_indices[0];
+	}
 
 	if (vkCreateSwapchainKHR(l_device, &create_info, NULL,
 				 swapchain) != VK_SUCCESS) {
@@ -496,7 +506,7 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 		.pNext = NULL,
 		.flags = 0,
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-		.primitiveRestartEnable = VK_TRUE
+		.primitiveRestartEnable = VK_FALSE
 	};
 
 	VkViewport viewport = {
@@ -665,7 +675,7 @@ int create_command_pool(VkDevice l_device,
 	VkCommandPoolCreateInfo command_pool_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.pNext = NULL,
-		.flags = 0,
+		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = queue_create_info.queueFamilyIndex
 	};
 
@@ -728,6 +738,7 @@ int record_command_buffer(VkCommandBuffer command_buffer,
 
 	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
 	graphics_pipeline);
+
 	VkViewport viewport = {
 		.x = 0.0f,
 		.y = 0.0f,
@@ -736,6 +747,7 @@ int record_command_buffer(VkCommandBuffer command_buffer,
 		.minDepth = 0.0f,
 		.maxDepth = 1.0f
 	};
+	vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
 	VkRect2D scissor = {
 		.offset = {0, 0},
@@ -743,7 +755,9 @@ int record_command_buffer(VkCommandBuffer command_buffer,
 	};
 
 	vkCmdDraw(command_buffer, 3, 1, 0, 0);
+
 	vkCmdEndRenderPass(command_buffer);
+
 	if(vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
 		printf("failed to record command buffer");
 		return error_return;
@@ -769,28 +783,17 @@ int create_sync_objects(VkSemaphore image_availabe_semaphores[],
 	};
 
 	for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		if(vkCreateSemaphore(l_device, &semaphore_create_info, 0,
-			     &image_availabe_semaphores[i]) != VK_SUCCESS) {
-			printf("failed to create synchronization objects for a frame\n");
-			return error_return;
-		}
-
-		if(vkCreateSemaphore(l_device, &semaphore_create_info, 0,
-				&render_finished_semaphores[i]) != VK_SUCCESS) {
-			printf("failed to create synchronization objects for a frame\n");
-			return error_return;
-		}
-
-		if(vkCreateFence(l_device, &fence_info, 0,
-				&in_flight_fences[i]) != VK_SUCCESS) {
-			printf("failed to create synchronization objects for a frame\n");
+		if (vkCreateSemaphore(l_device, &semaphore_create_info, NULL, &image_availabe_semaphores[i]) != VK_SUCCESS ||
+		    vkCreateSemaphore(l_device, &semaphore_create_info, NULL, &render_finished_semaphores[i]) != VK_SUCCESS ||
+		    vkCreateFence(l_device, &fence_info, NULL, &in_flight_fences[i]) != VK_SUCCESS) {
+			printf("failed to create synchronization objects for a frame!");
 			return error_return;
 		}
 	}
 	return success_return;
 }
 
-int draw_frame(VkDevice l_device, VkSemaphore image_availabe_semaphores[],
+int draw_frame(VkDevice l_device, VkSemaphore image_available_semaphores[],
 	       VkSemaphore render_finished_semaphores[], VkFence in_flight_fences[],
 	       VkSwapchainKHR swapchain, VkCommandBuffer command_buffers[], 
 	       VkRenderPass render_pass, VkExtent2D extent,
@@ -802,14 +805,14 @@ int draw_frame(VkDevice l_device, VkSemaphore image_availabe_semaphores[],
 	
 	uint32_t image_index;
 	vkAcquireNextImageKHR(l_device, swapchain, UINT64_MAX,
-			      image_availabe_semaphores[current_frame], VK_NULL_HANDLE,
+			      image_available_semaphores[current_frame], VK_NULL_HANDLE,
 			      &image_index);
 
 	vkResetCommandBuffer(command_buffers[current_frame], 0);
 	record_command_buffer(command_buffers[current_frame], render_pass, framebuffers,
 			      image_index, extent, graphics_pipeline);
 	
-	VkSemaphore wait_semaphores[] = {image_availabe_semaphores[current_frame]};
+	VkSemaphore wait_semaphores[] = {image_available_semaphores[current_frame]};
 	VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 	VkSemaphore signal_semaphores[] = {render_finished_semaphores[current_frame]};
 
@@ -825,8 +828,7 @@ int draw_frame(VkDevice l_device, VkSemaphore image_availabe_semaphores[],
 		.pSignalSemaphores = signal_semaphores
 	};
 
-	if(vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[current_frame])
-	   != VK_SUCCESS) {
+	if(vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[current_frame]) != VK_SUCCESS) {
 		printf("failed to submit draw command buffer!");
 		return error_return;
 	}
@@ -844,6 +846,7 @@ int draw_frame(VkDevice l_device, VkSemaphore image_availabe_semaphores[],
 		.pResults = NULL
 	};
 	vkQueuePresentKHR(present_queue, &present_info);
+	current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 	return success_return;
 }
 
@@ -853,9 +856,15 @@ int main()
 	init_window(&window);
 
 	VkInstance instance;
-	
 	if (create_instance(&instance) != success_return) {
 		printf("Unable to create instance Aborting");
+		return error_return;
+	}
+
+	VkSurfaceKHR surface;
+	if (glfwCreateWindowSurface(instance, window, NULL,
+				    &surface) != VK_SUCCESS) {
+		printf("Failed to create window surface!");
 		return error_return;
 	}
 
@@ -864,18 +873,11 @@ int main()
 		printf("Unable to pick device! Aborting");
 		return error_return;
 	}
+
 	VkPhysicalDeviceFeatures p_device_features;
 	vkGetPhysicalDeviceFeatures(p_device, &p_device_features);
 	VkPhysicalDeviceProperties p_device_properties;
 	vkGetPhysicalDeviceProperties(p_device, &p_device_properties);
-
-
-	VkSurfaceKHR surface;
-	if (glfwCreateWindowSurface(instance, window, NULL,
-				    &surface) != VK_SUCCESS) {
-		printf("Failed to create window surface!");
-		return error_return;
-	}
 
 	VkDeviceQueueCreateInfo queue_create_infos[2];
 	if(find_queue_families(p_device, surface, &queue_create_infos[0],
@@ -908,7 +910,7 @@ int main()
 	setting_swapchain_extent(&extent);
 
 	VkSwapchainKHR swapchain;
-	if (create_swapchain(p_device, surface, queue_create_infos[0].queueFamilyIndex,
+	if (create_swapchain(p_device, surface, queue_create_infos,
 			     l_device, surface_format, present_mode, extent,
 			     &swapchain) != success_return) {
 		printf("Failed to create swap chain! Aborting");
@@ -978,10 +980,25 @@ int main()
 			   command_buffers, render_pass, extent,
 			   graphics_pipeline, swapchain_framebuffers,
 			   graphics_queue, present_queue, current_frame);
-
-		current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
+
 	vkDeviceWaitIdle(l_device);
+
+
+	for(int i = 0; i < swapchain_image_count; i++) {
+		vkDestroyFramebuffer(l_device, swapchain_framebuffers[i], NULL);
+	}
+
+	for (int i = 0; i < swapchain_image_count; i++) {
+		vkDestroyImageView(l_device, image_views[i], NULL);
+	}
+	vkDestroySwapchainKHR(l_device, swapchain, NULL);
+
+	vkDestroyPipeline(l_device, graphics_pipeline, NULL);
+	vkDestroyPipelineLayout(l_device, pipeline_layout, NULL);
+
+	vkDestroyRenderPass(l_device, render_pass, NULL);
+
 	for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(l_device, image_available_semaphores[i], NULL);
 		vkDestroySemaphore(l_device, render_finished_semaphores[i], NULL);
@@ -989,24 +1006,13 @@ int main()
 	}
 
 	vkDestroyCommandPool(l_device, command_pool, NULL);
-	for(int i = 0; i < swapchain_image_count; i++) {
-		vkDestroyFramebuffer(l_device, swapchain_framebuffers[i], NULL);
-	}
 
-	vkDestroyPipeline(l_device, graphics_pipeline, NULL);
-	vkDestroyPipelineLayout(l_device, pipeline_layout, NULL);
-	vkDestroyRenderPass(l_device, render_pass, NULL);
-
-	for (int i = 0; i < swapchain_image_count; i++) {
-		vkDestroyImageView(l_device, image_views[i], NULL);
-	}
-
-	vkDestroySwapchainKHR(l_device, swapchain, NULL);
 	vkDestroyDevice(l_device, NULL);
+	
 	vkDestroySurfaceKHR(instance, surface, NULL);
+
 	vkDestroyInstance(instance, NULL);
 
 	glfwDestroyWindow(window);
-
 	glfwTerminate();
 }
