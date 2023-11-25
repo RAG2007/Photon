@@ -605,7 +605,7 @@ int create_graphics_pipeline(VkDevice l_device, VkExtent2D extent,
 	return success_return;
 }
 
-int create_framebuffer(int swapchain_image_count, VkImageView image_views[],
+int create_framebuffers(int swapchain_image_count, VkImageView image_views[],
 			VkExtent2D extent, VkRenderPass render_pass,
 			VkDevice l_device, VkFramebuffer swapchain_framebuffers[])
 {
@@ -845,8 +845,6 @@ int main()
 	VkPhysicalDeviceProperties p_device_properties;
 	vkGetPhysicalDeviceProperties(p_device, &p_device_properties);
 
-	
-
 	VkDeviceQueueCreateInfo queue_create_info;
 	if(find_queue_families(p_device, &queue_create_info) != success_return) {
 		printf("Failed to find appropriate queue families");
@@ -859,7 +857,6 @@ int main()
 		printf("Failed to create logical device! Aborting");
 		return error_return;
 	}
-	
 
 	VkQueue graphics_queue;
 	vkGetDeviceQueue(l_device, queue_create_info.queueFamilyIndex, 0,
@@ -923,7 +920,7 @@ int main()
 	}
 
 	VkFramebuffer swapchain_framebuffers[swapchain_image_count];
-	if(create_framebuffer(swapchain_image_count, image_views, extent,
+	if(create_framebuffers(swapchain_image_count, image_views, extent,
 			       render_pass, l_device, swapchain_framebuffers)) {
 		return error_return;
 	}
@@ -955,6 +952,7 @@ int main()
 			   command_buffers, render_pass, extent,
 			   graphics_pipeline, swapchain_framebuffers,
 			   graphics_queue, present_queue, current_frame);
+
 		current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 	vkDeviceWaitIdle(l_device);
