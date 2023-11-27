@@ -66,15 +66,22 @@ struct engine_data {
 	uint32_t current_frame;
 };
 
+
 int framebuffer_resized = 0;
 
+void *user_window_pointer;
+
+void resize_callback(GLFWwindow* window, int width, int height) {
+	framebuffer_resized = 1;
+}
 
 void engine_init_window(struct engine_data *data)
 {
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	data->window = glfwCreateWindow(WIDTH, HEIGHT, "Photon", NULL, NULL);
+	glfwSetWindowUserPointer(data->window, user_window_pointer);
+	glfwSetFramebufferSizeCallback(data->window, resize_callback);
 }
 
 
@@ -137,7 +144,7 @@ int engine_pick_physical_device(struct engine_data *data)
 	return success_return;
 }
 
-int find_queue_families(struct engine_data *data)
+int engine_find_queue_families(struct engine_data *data)
 {
 	vkGetPhysicalDeviceQueueFamilyProperties(data->physical_device,
 						 &data->queue_families_count,
@@ -187,7 +194,7 @@ int find_queue_families(struct engine_data *data)
 	return success_return;
 }
 
-int create_logical_device(struct engine_data *data)
+int engine_create_device(struct engine_data *data)
 {
 	const char *const device_extension_list[] =  {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -210,7 +217,7 @@ int create_logical_device(struct engine_data *data)
 	return success_return;
 }
 
-int setting_surface_format(struct engine_data *data)
+int engine_set_surface_format(struct engine_data *data)
 {
 	uint32_t surface_format_count;
 	vkGetPhysicalDeviceSurfaceFormatsKHR(data->physical_device, data->surface,
@@ -230,7 +237,7 @@ int setting_surface_format(struct engine_data *data)
 	return success_return;
 }
 
-int setting_present_mode(struct engine_data *data)
+int engine_setting_present_mode(struct engine_data *data)
 {
 	uint32_t present_mode_count;
 	vkGetPhysicalDeviceSurfacePresentModesKHR(data->physical_device, data->surface,
@@ -249,14 +256,16 @@ int setting_present_mode(struct engine_data *data)
 	return success_return;
 }
 
-int setting_swapchain_extent(struct engine_data *data)
+int engine_setting_swapchain_extent(struct engine_data *data)
 {
-	data->extent.height = HEIGHT;
-	data->extent.width = WIDTH;
+	int width, height;
+	glfwGetFramebufferSize(data->window, &width, &height);
+	data->extent.height = height;
+	data->extent.width = width;
 	return success_return;
 }
 
-int create_swapchain(struct engine_data *data)
+int engine_create_swapchain(struct engine_data *data)
 {
 	VkSurfaceCapabilitiesKHR capabilities;
 	if(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(data->physical_device, data->surface,
@@ -308,7 +317,7 @@ int create_swapchain(struct engine_data *data)
 	return success_return;
 }
 
-int create_image_views(struct engine_data *data)
+int engine_create_image_views(struct engine_data *data)
 {
 	for (int i = 0; i < data->swapchain_image_count; i++) {
 		VkImageViewCreateInfo create_info = {
@@ -371,7 +380,7 @@ char *read_file(char *name, int *length)
 	return buffer;
 }
 
-int create_shader_module(struct engine_data *data, const char *code, int code_length,
+int engine_create_shader_module(struct engine_data *data, const char *code, int code_length,
 			 VkShaderModule *shader_module)
 {
 	VkShaderModuleCreateInfo create_info = {
@@ -389,7 +398,7 @@ int create_shader_module(struct engine_data *data, const char *code, int code_le
 	return success_return;
 }
 
-int create_render_pass(struct engine_data *data)
+int engine_create_render_pass(struct engine_data *data)
 {
 	VkAttachmentDescription color_attachment = {
 		.flags = 0,
@@ -450,7 +459,7 @@ int create_render_pass(struct engine_data *data)
 	return success_return;
 }
 
-int create_graphics_pipeline(struct engine_data *data)
+int engine_create_graphics_pipeline(struct engine_data *data)
 {
 	int length_vert;
 	int length_frag;
@@ -459,11 +468,11 @@ int create_graphics_pipeline(struct engine_data *data)
 	char *frag_shader_code = read_file("shaders/frag.spv", &length_frag);
 
 	VkShaderModule vert_shader_module;
-	create_shader_module(data, vert_shader_code, length_vert,
+	engine_create_shader_module(data, vert_shader_code, length_vert,
 			     &vert_shader_module);
 
 	VkShaderModule frag_shader_module;
-	create_shader_module(data, frag_shader_code, length_frag,
+	engine_create_shader_module(data, frag_shader_code, length_frag,
 			     &frag_shader_module);
 
 	VkPipelineShaderStageCreateInfo vert_shader_stage_info = {
@@ -653,7 +662,7 @@ int create_graphics_pipeline(struct engine_data *data)
 	return success_return;
 }
 
-int create_framebuffers(struct engine_data *data)
+int engine_create_framebuffers(struct engine_data *data)
 {
 	for(int i = 0; i < data->swapchain_image_count; i++) {
 		VkImageView attachments[] = {
@@ -680,7 +689,7 @@ int create_framebuffers(struct engine_data *data)
 	return success_return;
 }
 
-int create_command_pool(struct engine_data *data)
+int engine_create_command_pool(struct engine_data *data)
 {
 	VkCommandPoolCreateInfo command_pool_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -697,7 +706,7 @@ int create_command_pool(struct engine_data *data)
 	return success_return;
 }
 
-int create_command_buffers(struct engine_data *data) {
+int engine_create_command_buffers(struct engine_data *data) {
 	VkCommandBufferAllocateInfo alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.pNext = NULL,
@@ -713,7 +722,7 @@ int create_command_buffers(struct engine_data *data) {
 	return success_return;
 }
 
-int record_command_buffer(struct engine_data *data) {
+int engine_record_command_buffer(struct engine_data *data) {
 	VkCommandBufferBeginInfo begin_info = {
 		.sType =  VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.pNext = NULL,
@@ -771,7 +780,7 @@ int record_command_buffer(struct engine_data *data) {
 	return success_return;
 }
 
-int create_sync_objects(struct engine_data *data)
+int engine_create_sync_objects(struct engine_data *data)
 {
 	VkSemaphoreCreateInfo semaphore_create_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
@@ -797,7 +806,7 @@ int create_sync_objects(struct engine_data *data)
 	return success_return;
 }
 
-void cleanup_swapchain(struct engine_data *data)
+void engine_cleanup_swapchain(struct engine_data *data)
 {
 	for(int i = 0; i < data->swapchain_image_count; i++) {
 		vkDestroyFramebuffer(data->device, data->swapchain_framebuffers[i], NULL);
@@ -808,18 +817,57 @@ void cleanup_swapchain(struct engine_data *data)
 	vkDestroySwapchainKHR(data->device, data->swapchain, NULL);
 }
 
-int draw_frame(struct engine_data *data)
+int engine_recreate_swapchain(struct engine_data *data) {
+	int width = 0, height = 0;
+        glfwGetFramebufferSize(data->window, &width, &height);
+
+        while (width == 0 || height == 0) {
+            glfwGetFramebufferSize(data->window, &width, &height);
+            glfwWaitEvents();
+        }
+
+	vkDeviceWaitIdle(data->device);
+
+	engine_cleanup_swapchain(data);
+
+	engine_set_surface_format(data);
+	engine_setting_present_mode(data);
+	engine_setting_swapchain_extent(data);
+
+	engine_create_swapchain(data);
+
+	vkGetSwapchainImagesKHR(data->device, data->swapchain, &data->swapchain_image_count, NULL);
+	data->swapchain_images = malloc(sizeof(VkImage) * data->swapchain_image_count);
+	vkGetSwapchainImagesKHR(data->device, data->swapchain, &data->swapchain_image_count, data->swapchain_images);
+
+	data->image_views = malloc(sizeof(VkImageView) * data->swapchain_image_count);
+	data->swapchain_framebuffers = malloc(sizeof(VkFramebuffer) * data->swapchain_image_count);
+
+	engine_create_image_views(data);
+
+	engine_create_framebuffers(data);
+	return success_return;
+}
+
+int engine_draw_frame(struct engine_data *data)
 {	
 
 	vkWaitForFences(data->device, 1, &data->in_flight_fences[data->current_frame], VK_TRUE, UINT64_MAX);
 
+	VkResult result = vkAcquireNextImageKHR(data->device, data->swapchain, UINT64_MAX, data->image_available_semaphores[data->current_frame], VK_NULL_HANDLE, &data->image_index);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		engine_recreate_swapchain(data);
+		return success_return;
+	} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		printf("failed to acquire swap chain image!");
+		return error_return;
+	}
+
 	vkResetFences(data->device, 1, &data->in_flight_fences[data->current_frame]);
 	
-	vkAcquireNextImageKHR(data->device, data->swapchain, UINT64_MAX, data->image_available_semaphores[data->current_frame], VK_NULL_HANDLE, &data->image_index);
-
-	
 	vkResetCommandBuffer(data->command_buffers[data->current_frame], 0);
-	record_command_buffer(data);
+	engine_record_command_buffer(data);
 
 	VkSemaphore wait_semaphores[] = {data->image_available_semaphores[data->current_frame]};
 	VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -852,14 +900,21 @@ int draw_frame(struct engine_data *data)
 		.pImageIndices = &data->image_index,
 		.pResults = NULL
 	};
-	vkQueuePresentKHR(data->present_queue, &present_info);
+	result = vkQueuePresentKHR(data->present_queue, &present_info);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
+		framebuffer_resized = 0;
+		engine_recreate_swapchain(data);
+	} else if (result != VK_SUCCESS) {
+		printf("failed to present swap chain image!");
+		return error_return;
+	}
 	return success_return;
 }
 
 
 int main()
 {
-
 	struct engine_data data;
 	memset(&data, 0, sizeof(struct engine_data));
 	engine_init_window(&data);
@@ -882,14 +937,14 @@ int main()
 	vkGetPhysicalDeviceFeatures(data.physical_device, &data.physical_device_features);
 	vkGetPhysicalDeviceProperties(data.physical_device, &data.physical_device_properties);
 
-	if(find_queue_families(&data) != success_return) {
+	if(engine_find_queue_families(&data) != success_return) {
 		printf("Failed to find appropriate queue families");
 		return error_return;
 	}
 
 	data.queue_families_count = data.queue_create_infos[0].queueFamilyIndex == data.queue_create_infos[1].queueFamilyIndex ? 1 : 2;
 
-	if(create_logical_device(&data) != success_return) {
+	if(engine_create_device(&data) != success_return) {
 		printf("Failed to create logical device! Aborting");
 		return error_return;
 	}
@@ -898,14 +953,14 @@ int main()
 
 	vkGetDeviceQueue(data.device, data.queue_create_infos[1].queueFamilyIndex, 0, &data.present_queue);
 
-	setting_surface_format(&data);
+	engine_set_surface_format(&data);
 
-	setting_present_mode(&data);
+	engine_setting_present_mode(&data);
 
-	setting_swapchain_extent(&data);
+	engine_setting_swapchain_extent(&data);
 
 
-	if (create_swapchain(&data) != success_return) {
+	if (engine_create_swapchain(&data) != success_return) {
 		printf("Failed to create swap chain! Aborting");
 		return error_return;
 	}
@@ -917,46 +972,46 @@ int main()
 	data.image_views = malloc(sizeof(VkImageView) * data.swapchain_image_count);
 	data.swapchain_framebuffers = malloc(sizeof(VkFramebuffer) * data.swapchain_image_count);
 
-	if (create_image_views(&data) != success_return) {
+	if (engine_create_image_views(&data) != success_return) {
 		printf("Failed to create Image Views");
 		return error_return;
 	}
 
-	if(create_render_pass(&data) !=
+	if(engine_create_render_pass(&data) !=
 	   success_return) {
 		printf("failed to create render pass!");
 		return error_return;
 	}
 
-	if(create_graphics_pipeline(&data)
+	if(engine_create_graphics_pipeline(&data)
 	   != success_return) {
 		return error_return;
 	}
 
-	if(create_framebuffers(&data) != success_return) {
+	if(engine_create_framebuffers(&data) != success_return) {
 		return error_return;
 	}
 
-	if(create_command_pool(&data) != success_return) {
+	if(engine_create_command_pool(&data) != success_return) {
 		return error_return;
 	}
 
-	if(create_command_buffers(&data)) {
+	if(engine_create_command_buffers(&data)) {
 		return error_return;
 	}
 
 
-	create_sync_objects(&data);
+	engine_create_sync_objects(&data);
 	while (!glfwWindowShouldClose(data.window)) {
 		glfwPollEvents();
-		if(draw_frame(&data) != success_return) {
+		if(engine_draw_frame(&data) != success_return) {
 			return error_return;
 		}
 		data.current_frame = (data.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 	vkDeviceWaitIdle(data.device);
 
-	cleanup_swapchain(&data);
+	engine_cleanup_swapchain(&data);
 
 	vkDestroyPipeline(data.device, data.graphics_pipeline, NULL);
 	vkDestroyPipelineLayout(data.device, data.pipeline_layout, NULL);
