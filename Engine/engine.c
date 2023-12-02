@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -31,6 +32,18 @@ int window_pointer;
 struct queue_family_indices {
 	int graphics_family;
    	int present_family;
+};
+
+
+struct vertex {
+	float position[2];
+	float color[3];
+};
+
+const struct vertex vertices[3] = {
+	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
 };
 
 struct engine_data {
@@ -70,6 +83,27 @@ struct engine_data {
 int framebuffer_resized = 0;
 
 void *user_window_pointer;
+
+VkVertexInputBindingDescription get_binding_description() {
+	VkVertexInputBindingDescription binding_description = {
+		.binding = 0,
+		.stride = sizeof(struct vertex),
+		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+	};
+	return binding_description;
+}
+
+VkVertexInputAttributeDescription *get_vertex_input_attribute_description() {
+	VkVertexInputAttributeDescription *attribute_descriptions = malloc(2 * sizeof(VkVertexInputAttributeDescription));
+	attribute_descriptions[0] = (VkVertexInputAttributeDescription){
+		.location = 0,
+		.binding = 0,
+		.format = VK_FORMAT_R32G32_SFLOAT,
+		.offset = offsetof(struct vertex, position)
+	};
+	return attribute_descriptions;
+}
+
 
 void resize_callback(GLFWwindow* window, int width, int height) {
 	framebuffer_resized = 1;

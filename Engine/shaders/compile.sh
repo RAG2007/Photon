@@ -1,2 +1,2 @@
-/usr/bin/glslc shader.vert -o vert.spv
-/usr/bin/glslc shader.frag -o frag.spv
+glslang -V shader.vert -o vert.spv
+glslang -V shader.frag -o frag.spv
