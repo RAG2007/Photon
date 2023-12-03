@@ -40,6 +40,7 @@ struct vertex {
 	float color[3];
 };
 
+int vertices_count = 3;
 const struct vertex vertices[3] = {
 	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
 	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
@@ -71,6 +72,7 @@ struct engine_data {
 	VkPipeline graphics_pipeline;
 	VkFramebuffer *swapchain_framebuffers;
 	VkCommandPool command_pool;
+	VkBuffer vertex_buffer;
 	VkCommandBuffer command_buffers[2];
 	uint32_t image_index;
 	VkSemaphore image_available_semaphores[2];
@@ -84,7 +86,7 @@ int framebuffer_resized = 0;
 
 void *user_window_pointer;
 
-VkVertexInputBindingDescription get_binding_description() {
+VkVertexInputBindingDescription get_vertex_binding_description() {
 	VkVertexInputBindingDescription binding_description = {
 		.binding = 0,
 		.stride = sizeof(struct vertex),
@@ -97,6 +99,12 @@ VkVertexInputAttributeDescription *get_vertex_input_attribute_description() {
 	VkVertexInputAttributeDescription *attribute_descriptions = malloc(2 * sizeof(VkVertexInputAttributeDescription));
 	attribute_descriptions[0] = (VkVertexInputAttributeDescription){
 		.location = 0,
+		.binding = 0,
+		.format = VK_FORMAT_R32G32_SFLOAT,
+		.offset = offsetof(struct vertex, position)
+	};
+	attribute_descriptions[1] = (VkVertexInputAttributeDescription){
+		.location = 1,
 		.binding = 0,
 		.format = VK_FORMAT_R32G32_SFLOAT,
 		.offset = offsetof(struct vertex, position)
@@ -302,7 +310,7 @@ int engine_setting_swapchain_extent(struct engine_data *data)
 int engine_create_swapchain(struct engine_data *data)
 {
 	VkSurfaceCapabilitiesKHR capabilities;
-	if(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(data->physical_device, data->surface,
+	if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(data->physical_device, data->surface,
 						  &capabilities) != VK_SUCCESS) {
 		printf("Failed to get physical device surface capabilities!\n");
 		return error_return;
@@ -548,14 +556,18 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 		.pDynamicStates = dynamic_states
 	};
 
+	VkVertexInputBindingDescription binding_description = get_vertex_binding_description();
+
+	VkVertexInputAttributeDescription *attribute_descriptions = get_vertex_input_attribute_description();
+
 	VkPipelineVertexInputStateCreateInfo vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
-		.vertexBindingDescriptionCount = 0,
-		.pVertexBindingDescriptions = NULL,
-		.vertexAttributeDescriptionCount = 0,
-		.pVertexAttributeDescriptions = NULL
+		.vertexBindingDescriptionCount = 1,
+		.pVertexBindingDescriptions = &binding_description,
+		.vertexAttributeDescriptionCount = 2,
+		.pVertexAttributeDescriptions = attribute_descriptions
 	};
 
 	VkPipelineInputAssemblyStateCreateInfo input_assembly = {
@@ -698,7 +710,7 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 
 int engine_create_framebuffers(struct engine_data *data)
 {
-	for(int i = 0; i < data->swapchain_image_count; i++) {
+	for (int i = 0; i < data->swapchain_image_count; i++) {
 		VkImageView attachments[] = {
 			data->image_views[i]
 		};
@@ -714,7 +726,7 @@ int engine_create_framebuffers(struct engine_data *data)
 			.height = data->extent.height,
 			.layers = 1
 		};
-		if(vkCreateFramebuffer(data->device, &framebuffer_info, 0,
+		if (vkCreateFramebuffer(data->device, &framebuffer_info, 0,
 		  		       &data->swapchain_framebuffers[i]) != VK_SUCCESS) {
 			printf("Failed to create framebuffer!\n");
 			return error_return;
@@ -740,7 +752,29 @@ int engine_create_command_pool(struct engine_data *data)
 	return success_return;
 }
 
-int engine_create_command_buffers(struct engine_data *data) {
+int create_vertex_buffer(struct engine_data *data)
+{
+	VkBufferCreateInfo vertex_buffer_create_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0,
+		.size = sizeof(const struct vertex) * vertices_count,
+		.usage =  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.queueFamilyIndexCount = 0,
+		.pQueueFamilyIndices = NULL
+	};
+
+	if (vkCreateBuffer(data->device, &vertex_buffer_create_info, NULL, &data->vertex_buffer)
+	    != VK_SUCCESS) {
+		printf("failed to create vertex buffer!");
+		return error_return;
+	}
+	return success_return;
+}
+
+int engine_create_command_buffers(struct engine_data *data)
+{
 	VkCommandBufferAllocateInfo alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.pNext = NULL,
@@ -756,7 +790,8 @@ int engine_create_command_buffers(struct engine_data *data) {
 	return success_return;
 }
 
-int engine_record_command_buffer(struct engine_data *data) {
+int engine_record_command_buffer(struct engine_data *data)
+{
 	VkCommandBufferBeginInfo begin_info = {
 		.sType =  VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.pNext = NULL,
@@ -764,7 +799,7 @@ int engine_record_command_buffer(struct engine_data *data) {
 		.pInheritanceInfo = NULL,
 	};
 	VkCommandBuffer *command_buffer = &data->command_buffers[data->current_frame];
-	if(vkBeginCommandBuffer(*command_buffer, &begin_info) != VK_SUCCESS) {
+	if (vkBeginCommandBuffer(*command_buffer, &begin_info) != VK_SUCCESS) {
 		printf("Failed to create begin recording command buffer!\n");
 		return error_return;
 	}
@@ -807,7 +842,7 @@ int engine_record_command_buffer(struct engine_data *data) {
 
 	vkCmdEndRenderPass(*command_buffer);
 
-	if(vkEndCommandBuffer(*command_buffer) != VK_SUCCESS) {
+	if (vkEndCommandBuffer(*command_buffer) != VK_SUCCESS) {
 		printf("failed to record command buffer");
 		return error_return;
 	}
@@ -829,7 +864,7 @@ int engine_create_sync_objects(struct engine_data *data)
 		.flags = VK_FENCE_CREATE_SIGNALED_BIT
 	};
 
-	for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		if (vkCreateSemaphore(data->device, &semaphore_create_info, NULL, &data->image_available_semaphores[i]) != VK_SUCCESS ||
 		    vkCreateSemaphore(data->device, &semaphore_create_info, NULL, &data->render_finished_semaphores[i]) != VK_SUCCESS ||
 		    vkCreateFence(data->device, &fence_info, NULL, &data->in_flight_fences[i]) != VK_SUCCESS) {
@@ -842,7 +877,7 @@ int engine_create_sync_objects(struct engine_data *data)
 
 void engine_cleanup_swapchain(struct engine_data *data)
 {
-	for(int i = 0; i < data->swapchain_image_count; i++) {
+	for (int i = 0; i < data->swapchain_image_count; i++) {
 		vkDestroyFramebuffer(data->device, data->swapchain_framebuffers[i], NULL);
 	}
 	for (int i = 0; i < data->swapchain_image_count; i++) {
@@ -918,7 +953,7 @@ int engine_draw_frame(struct engine_data *data)
 		.signalSemaphoreCount = 1,
 		.pSignalSemaphores = signal_semaphores
 	};
-	if(vkQueueSubmit(data->graphics_queue, 1, &submit_info, data->in_flight_fences[data->current_frame]) != VK_SUCCESS) {
+	if (vkQueueSubmit(data->graphics_queue, 1, &submit_info, data->in_flight_fences[data->current_frame]) != VK_SUCCESS) {
 		printf("failed to submit draw command buffer!");
 		return error_return;
 	}
@@ -971,14 +1006,14 @@ int main()
 	vkGetPhysicalDeviceFeatures(data.physical_device, &data.physical_device_features);
 	vkGetPhysicalDeviceProperties(data.physical_device, &data.physical_device_properties);
 
-	if(engine_find_queue_families(&data) != success_return) {
+	if (engine_find_queue_families(&data) != success_return) {
 		printf("Failed to find appropriate queue families");
 		return error_return;
 	}
 
 	data.queue_families_count = data.queue_create_infos[0].queueFamilyIndex == data.queue_create_infos[1].queueFamilyIndex ? 1 : 2;
 
-	if(engine_create_device(&data) != success_return) {
+	if (engine_create_device(&data) != success_return) {
 		printf("Failed to create logical device! Aborting");
 		return error_return;
 	}
@@ -1011,26 +1046,26 @@ int main()
 		return error_return;
 	}
 
-	if(engine_create_render_pass(&data) !=
+	if (engine_create_render_pass(&data) !=
 	   success_return) {
 		printf("failed to create render pass!");
 		return error_return;
 	}
 
-	if(engine_create_graphics_pipeline(&data)
+	if (engine_create_graphics_pipeline(&data)
 	   != success_return) {
 		return error_return;
 	}
 
-	if(engine_create_framebuffers(&data) != success_return) {
+	if (engine_create_framebuffers(&data) != success_return) {
 		return error_return;
 	}
 
-	if(engine_create_command_pool(&data) != success_return) {
+	if (engine_create_command_pool(&data) != success_return) {
 		return error_return;
 	}
 
-	if(engine_create_command_buffers(&data)) {
+	if (engine_create_command_buffers(&data)) {
 		return error_return;
 	}
 
@@ -1038,7 +1073,7 @@ int main()
 	engine_create_sync_objects(&data);
 	while (!glfwWindowShouldClose(data.window)) {
 		glfwPollEvents();
-		if(engine_draw_frame(&data) != success_return) {
+		if (engine_draw_frame(&data) != success_return) {
 			return error_return;
 		}
 		data.current_frame = (data.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -1047,12 +1082,14 @@ int main()
 
 	engine_cleanup_swapchain(&data);
 
+	vkDestroyBuffer(data.device, data.vertex_buffer, NULL);
+
 	vkDestroyPipeline(data.device, data.graphics_pipeline, NULL);
 	vkDestroyPipelineLayout(data.device, data.pipeline_layout, NULL);
 
 	vkDestroyRenderPass(data.device, data.render_pass, NULL);
 
-	for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(data.device, data.image_available_semaphores[i], NULL);
 		vkDestroySemaphore(data.device, data.render_finished_semaphores[i], NULL);
 		vkDestroyFence(data.device, data.in_flight_fences[i], NULL);
