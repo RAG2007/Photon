@@ -72,9 +72,15 @@ struct engine_data {
 	VkPipeline graphics_pipeline;
 	VkFramebuffer *swapchain_framebuffers;
 	VkCommandPool command_pool;
+
+	VkBuffer staging_buffer;
+	VkMemoryRequirements staging_memory_requirements;
+	VkDeviceMemory staging_buffer_memory;
+
 	VkBuffer vertex_buffer;
-	VkMemoryRequirements memory_requirements;
+	VkMemoryRequirements vertex_memory_requirements;
 	VkDeviceMemory vertex_buffer_memory;
+
 	VkCommandBuffer command_buffers[2];
 	uint32_t image_index;
 	VkSemaphore image_available_semaphores[2];
@@ -83,6 +89,10 @@ struct engine_data {
 	uint32_t current_frame;
 };
 
+enum vertex_buffers {
+	staging_vertex_buffer_enum,
+	main_vertex_buffer_enum
+};
 
 int framebuffer_resized = 0;
 
@@ -767,48 +777,120 @@ int find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties, str
 	return error_return;
 }
 
-int create_vertex_buffer(struct engine_data *data)
+int create_buffer(struct engine_data *data, VkDeviceSize size,
+	VkBufferUsageFlags usage,
+	VkMemoryPropertyFlags properties,
+	VkBuffer *buffer,
+	VkDeviceMemory *buffer_memory)
 {
+
 	VkBufferCreateInfo vertex_buffer_create_info = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
-		.size = sizeof(const struct vertex) * vertices_count,
-		.usage =  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		.size = size,
+		.usage =  usage,
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.queueFamilyIndexCount = 0,
 		.pQueueFamilyIndices = NULL
 	};
 
-	if (vkCreateBuffer(data->device, &vertex_buffer_create_info, NULL, &data->vertex_buffer)
+	if (vkCreateBuffer(data->device, &vertex_buffer_create_info, NULL, buffer)
 	    != VK_SUCCESS) {
 		printf("failed to create vertex buffer!");
 		return error_return;
 	}
 
-	vkGetBufferMemoryRequirements(data->device, data->vertex_buffer, &data->memory_requirements);
+	VkMemoryRequirements memory_requirements;
+	vkGetBufferMemoryRequirements(data->device, *buffer, &memory_requirements);
 
 	VkMemoryAllocateInfo allocation_info = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.pNext = NULL,
-		.allocationSize = data->memory_requirements.size,
-		.memoryTypeIndex = find_memory_type(data->memory_requirements.memoryTypeBits,
-						    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-						    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-						    data)
+		.allocationSize = memory_requirements.size,
+		.memoryTypeIndex = find_memory_type(memory_requirements.memoryTypeBits, properties, data)
 	};
 
-	if(vkAllocateMemory(data->device, &allocation_info, NULL, &data->vertex_buffer_memory) != VK_SUCCESS) {
+	if(vkAllocateMemory(data->device, &allocation_info, NULL, buffer_memory) != VK_SUCCESS) {
 		printf("Failed to allocate vertex buffer memory!");
 		return error_return;
 	}
-	vkBindBufferMemory(data->device, data->vertex_buffer, data->vertex_buffer_memory, 0);
+	vkBindBufferMemory(data->device, *buffer, *buffer_memory, 0);
+	return success_return;
+}
+
+void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size, struct engine_data *data)
+{
+	VkCommandBufferAllocateInfo allocation_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.pNext = NULL,
+		.commandPool = data->command_pool, //TOFIX add a separate command pool for this
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandBufferCount = 1
+	};
+
+	VkCommandBuffer command_buffer;
+	vkAllocateCommandBuffers(data->device, &allocation_info, &command_buffer);
+
+	VkCommandBufferBeginInfo begin_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.pNext = NULL,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		.pInheritanceInfo = NULL
+	};
+
+	vkBeginCommandBuffer(command_buffer, &begin_info);
+
+	VkBufferCopy copy_region = {
+		.srcOffset = 0,
+		.dstOffset = 0,
+		.size = size
+	};
+
+	vkCmdCopyBuffer(command_buffer, src_buffer, dst_buffer, 1, &copy_region);
+
+	vkEndCommandBuffer(command_buffer);
+
+	VkSubmitInfo submit_info = {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.pNext = NULL,
+		.waitSemaphoreCount = 0,
+		.pWaitSemaphores = NULL,
+		.pWaitDstStageMask = NULL,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &command_buffer,
+		.signalSemaphoreCount = 0,
+		.pSignalSemaphores = NULL
+	};
+
+	vkQueueSubmit(data->graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
+	vkQueueWaitIdle(data->graphics_queue); // TOFIX add fence for multiple transfers simultaneously
+	vkFreeCommandBuffers(data->device, data->command_pool, 1, &command_buffer);
+}
+
+int create_vertex_buffer(struct engine_data *data)
+{
+	VkDeviceSize buffer_size = sizeof(struct vertex) * vertices_count;
+	
+	create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+		      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &data->staging_buffer,
+		      &data->staging_buffer_memory);
 
 	void* vertex_buffer_data;
-	vkMapMemory(data->device, data->vertex_buffer_memory, 0, vertex_buffer_create_info.size, 0, &vertex_buffer_data);
-	memcpy(vertex_buffer_data, vertices, (size_t)vertex_buffer_create_info.size);
-	vkUnmapMemory(data->device, data->vertex_buffer_memory);
+	vkMapMemory(data->device, data->staging_buffer_memory, 0, buffer_size, 0, &vertex_buffer_data);
+	memcpy(vertex_buffer_data, vertices, buffer_size);
+	vkUnmapMemory(data->device, data->staging_buffer_memory);
 
+	create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+		     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &data->vertex_buffer,
+		     &data->vertex_buffer_memory);
+
+	copy_buffer(data->staging_buffer, data->vertex_buffer, buffer_size, data);
+
+	vkDestroyBuffer(data->device, data->staging_buffer, NULL);
+	vkFreeMemory(data->device, data->staging_buffer_memory, NULL);
 	return success_return;
 }
 
@@ -1131,9 +1213,9 @@ int main()
 
 	engine_cleanup_swapchain(&data);
 
-	vkDestroyBuffer(data.device, data.vertex_buffer, NULL);
+	vkDestroyBuffer(data.device, data.staging_buffer, NULL);
 
-	vkFreeMemory(data.device, data.vertex_buffer_memory, NULL);
+	vkFreeMemory(data.device, data.staging_buffer_memory, NULL);
 
 	vkDestroyPipeline(data.device, data.graphics_pipeline, NULL);
 	vkDestroyPipelineLayout(data.device, data.pipeline_layout, NULL);

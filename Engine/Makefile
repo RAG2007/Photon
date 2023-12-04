@@ -1,4 +1,4 @@
-CFLAGS = -g
+CFLAGS = -g -fsanitize=address,undefined
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
 compile: engine.c
