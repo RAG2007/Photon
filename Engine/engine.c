@@ -31,7 +31,7 @@ int window_pointer;
 
 struct queue_family_indices {
 	int graphics_family;
-   	int present_family;
+	int present_family;
 };
 
 
@@ -42,7 +42,7 @@ struct vertex {
 
 int vertices_count = 3;
 const struct vertex vertices[3] = {
-	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
 	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
 	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
 };
@@ -73,6 +73,8 @@ struct engine_data {
 	VkFramebuffer *swapchain_framebuffers;
 	VkCommandPool command_pool;
 	VkBuffer vertex_buffer;
+	VkMemoryRequirements memory_requirements;
+	VkDeviceMemory vertex_buffer_memory;
 	VkCommandBuffer command_buffers[2];
 	uint32_t image_index;
 	VkSemaphore image_available_semaphores[2];
@@ -106,8 +108,8 @@ VkVertexInputAttributeDescription *get_vertex_input_attribute_description() {
 	attribute_descriptions[1] = (VkVertexInputAttributeDescription){
 		.location = 1,
 		.binding = 0,
-		.format = VK_FORMAT_R32G32_SFLOAT,
-		.offset = offsetof(struct vertex, position)
+		.format = VK_FORMAT_R32G32B32_SFLOAT,
+		.offset = offsetof(struct vertex, color)
 	};
 	return attribute_descriptions;
 }
@@ -752,6 +754,19 @@ int engine_create_command_pool(struct engine_data *data)
 	return success_return;
 }
 
+int find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties, struct engine_data *data)
+{
+	VkPhysicalDeviceMemoryProperties memory_properties;
+	vkGetPhysicalDeviceMemoryProperties(data->physical_device, &memory_properties);
+
+	for(int i = 0; i < memory_properties.memoryTypeCount; i++) {
+		if (type_filter & (1 << i) && (memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
+			return i;
+	}
+	printf("failed to find suitable memory type!");
+	return error_return;
+}
+
 int create_vertex_buffer(struct engine_data *data)
 {
 	VkBufferCreateInfo vertex_buffer_create_info = {
@@ -770,6 +785,30 @@ int create_vertex_buffer(struct engine_data *data)
 		printf("failed to create vertex buffer!");
 		return error_return;
 	}
+
+	vkGetBufferMemoryRequirements(data->device, data->vertex_buffer, &data->memory_requirements);
+
+	VkMemoryAllocateInfo allocation_info = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.pNext = NULL,
+		.allocationSize = data->memory_requirements.size,
+		.memoryTypeIndex = find_memory_type(data->memory_requirements.memoryTypeBits,
+						    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+						    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+						    data)
+	};
+
+	if(vkAllocateMemory(data->device, &allocation_info, NULL, &data->vertex_buffer_memory) != VK_SUCCESS) {
+		printf("Failed to allocate vertex buffer memory!");
+		return error_return;
+	}
+	vkBindBufferMemory(data->device, data->vertex_buffer, data->vertex_buffer_memory, 0);
+
+	void* vertex_buffer_data;
+	vkMapMemory(data->device, data->vertex_buffer_memory, 0, vertex_buffer_create_info.size, 0, &vertex_buffer_data);
+	memcpy(vertex_buffer_data, vertices, (size_t)vertex_buffer_create_info.size);
+	vkUnmapMemory(data->device, data->vertex_buffer_memory);
+
 	return success_return;
 }
 
@@ -837,8 +876,14 @@ int engine_record_command_buffer(struct engine_data *data)
 		.offset = {0, 0},
 		.extent = data->extent
 	};
+	vkCmdSetScissor(*command_buffer, 0, 1, &scissor);
 
-	vkCmdDraw(*command_buffer, 3, 1, 0, 0);
+	VkBuffer vertex_buffers[] = {data->vertex_buffer};
+	VkDeviceSize offsets[] = {0};
+
+	vkCmdBindVertexBuffers(*command_buffer, 0, 1, vertex_buffers, offsets);
+
+	vkCmdDraw(*command_buffer, (uint32_t)vertices_count, 1, 0, 0);
 
 	vkCmdEndRenderPass(*command_buffer);
 
@@ -1065,6 +1110,10 @@ int main()
 		return error_return;
 	}
 
+	if(create_vertex_buffer(&data) != success_return) {
+		return error_return;
+	}
+
 	if (engine_create_command_buffers(&data)) {
 		return error_return;
 	}
@@ -1083,6 +1132,8 @@ int main()
 	engine_cleanup_swapchain(&data);
 
 	vkDestroyBuffer(data.device, data.vertex_buffer, NULL);
+
+	vkFreeMemory(data.device, data.vertex_buffer_memory, NULL);
 
 	vkDestroyPipeline(data.device, data.graphics_pipeline, NULL);
 	vkDestroyPipelineLayout(data.device, data.pipeline_layout, NULL);

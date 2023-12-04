@@ -1,4 +1,4 @@
-CFLAGS = -g -O3
+CFLAGS = -g
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
 compile: engine.c
