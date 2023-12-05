@@ -34,7 +34,6 @@ struct queue_family_indices {
 	int present_family;
 };
 
-
 struct vertex {
 	float position[2];
 	float color[3];
@@ -99,7 +98,8 @@ int framebuffer_resized = 0;
 
 void *user_window_pointer;
 
-VkVertexInputBindingDescription get_vertex_binding_description() {
+VkVertexInputBindingDescription get_vertex_binding_description()
+{
 	VkVertexInputBindingDescription binding_description = {
 		.binding = 0,
 		.stride = sizeof(struct vertex),
@@ -108,7 +108,8 @@ VkVertexInputBindingDescription get_vertex_binding_description() {
 	return binding_description;
 }
 
-VkVertexInputAttributeDescription *get_vertex_input_attribute_description() {
+VkVertexInputAttributeDescription *get_vertex_input_attribute_description()
+{
 	VkVertexInputAttributeDescription *attribute_descriptions = malloc(2 * sizeof(VkVertexInputAttributeDescription));
 	attribute_descriptions[0] = (VkVertexInputAttributeDescription){
 		.location = 0,
@@ -125,8 +126,8 @@ VkVertexInputAttributeDescription *get_vertex_input_attribute_description() {
 	return attribute_descriptions;
 }
 
-
-void engine_resize_callback(GLFWwindow* window, int width, int height) {
+void engine_resize_callback(GLFWwindow* window, int width, int height)
+{
 	framebuffer_resized = 1;
 }
 
@@ -138,7 +139,6 @@ void engine_init_window(struct engine_data *data)
 	glfwSetWindowUserPointer(data->window, user_window_pointer);
 	glfwSetFramebufferSizeCallback(data->window, engine_resize_callback);
 }
-
 
 int engine_create_vulkan_instance(struct engine_data *data)
 {
@@ -521,7 +521,6 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 		.pSpecializationInfo = NULL
 	};
 
-
 	VkPipelineShaderStageCreateInfo frag_shader_stage_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		.pNext = NULL,
@@ -773,7 +772,6 @@ int engine_create_vertex_buffer(struct engine_data *data, VkDeviceSize size,
 	VkBuffer *buffer,
 	VkDeviceMemory *buffer_memory)
 {
-
 	VkBufferCreateInfo vertices_buffer_create_info = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.pNext = NULL,
@@ -897,6 +895,7 @@ int engine_create_command_buffers(struct engine_data *data)
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 		.commandBufferCount = (uint32_t)MAX_FRAMES_IN_FLIGHT
 	};
+
 	if (vkAllocateCommandBuffers(data->device, &alloc_info, data->command_buffers) !=
 	    VK_SUCCESS) {
 		printf("Failed to create command buffers\n");
@@ -978,7 +977,6 @@ int engine_create_sync_objects(struct engine_data *data)
 		.flags = 0
 	};
 
-
 	VkFenceCreateInfo fence_info = {
 		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
 		.pNext = NULL,
@@ -1007,7 +1005,8 @@ void engine_cleanup_swapchain(struct engine_data *data)
 	vkDestroySwapchainKHR(data->device, data->swapchain, NULL);
 }
 
-int engine_recreate_swapchain(struct engine_data *data) {
+int engine_recreate_swapchain(struct engine_data *data)
+{
 	int width = 0, height = 0;
         glfwGetFramebufferSize(data->window, &width, &height);
 
@@ -1040,7 +1039,6 @@ int engine_recreate_swapchain(struct engine_data *data) {
 
 int engine_draw_frame(struct engine_data *data)
 {	
-
 	vkWaitForFences(data->device, 1, &data->in_flight_fences[data->current_frame], VK_TRUE, UINT64_MAX);
 
 	VkResult result = vkAcquireNextImageKHR(data->device, data->swapchain, UINT64_MAX, data->image_available_semaphores[data->current_frame], VK_NULL_HANDLE, &data->image_index);
@@ -1100,7 +1098,6 @@ int engine_draw_frame(struct engine_data *data)
 	}
 	return success_return;
 }
-
 
 int main()
 {
@@ -1201,7 +1198,6 @@ int main()
 	if (engine_create_command_buffers(&data)) {
 		return error_return;
 	}
-	
 
 	engine_create_sync_objects(&data);
 	while (!glfwWindowShouldClose(data.window)) {
