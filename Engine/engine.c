@@ -42,9 +42,9 @@ struct vertex {
 
 int vertices_count = 3;
 const struct vertex vertices[3] = {
-	{{0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+	{{0.0f, 0.2f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, 1.0f}, {0.0f, 1.0f, 0.0f}},
+	{{-0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}}
 };
 
 struct engine_data {
@@ -60,8 +60,8 @@ struct engine_data {
 	VkDeviceQueueCreateInfo queue_create_infos[2];
 	VkDevice device;
 	VkSurfaceFormatKHR surface_format;
-	VkPresentModeKHR present_mode;
 	VkExtent2D extent;
+	
 	VkSwapchainKHR swapchain;
 	uint32_t swapchain_image_count;
 	VkImage *swapchain_images;
@@ -71,17 +71,16 @@ struct engine_data {
 	VkPipelineLayout pipeline_layout;
 	VkPipeline graphics_pipeline;
 	VkFramebuffer *swapchain_framebuffers;
-	VkCommandPool command_pool;
-	VkCommandPool buffer_copy_command_pool;
+	VkCommandPool graphics_command_pool;
 
-	VkBuffer staging_buffer;
-	VkMemoryRequirements staging_memory_requirements;
-	VkDeviceMemory staging_buffer_memory;
-
-	VkBuffer vertex_buffer;
-	VkMemoryRequirements vertex_memory_requirements;
-	VkDeviceMemory vertex_buffer_memory;
-	VkFence vertex_buffer_fence;
+	VkCommandPool copy_vertex_buffer_command_pool;
+	VkBuffer staging_vertex_buffer;
+	VkMemoryRequirements staging_vertex_memory_requirements;
+	VkDeviceMemory staging_vertex_buffer_memory;
+	VkBuffer main_vertex_buffer;
+	VkMemoryRequirements main_vertex_memory_requirements;
+	VkDeviceMemory main_vertex_buffer_memory;
+	VkFence vertex_buffer_copy_fence;
 
 	VkCommandBuffer command_buffers[2];
 	uint32_t image_index;
@@ -127,7 +126,7 @@ VkVertexInputAttributeDescription *get_vertex_input_attribute_description() {
 }
 
 
-void resize_callback(GLFWwindow* window, int width, int height) {
+void engine_resize_callback(GLFWwindow* window, int width, int height) {
 	framebuffer_resized = 1;
 }
 
@@ -137,7 +136,7 @@ void engine_init_window(struct engine_data *data)
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	data->window = glfwCreateWindow(WIDTH, HEIGHT, "Photon", NULL, NULL);
 	glfwSetWindowUserPointer(data->window, user_window_pointer);
-	glfwSetFramebufferSizeCallback(data->window, resize_callback);
+	glfwSetFramebufferSizeCallback(data->window, engine_resize_callback);
 }
 
 
@@ -293,25 +292,6 @@ int engine_set_surface_format(struct engine_data *data)
 	return success_return;
 }
 
-int engine_setting_present_mode(struct engine_data *data)
-{
-	uint32_t present_mode_count;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(data->physical_device, data->surface,
-						  &present_mode_count, NULL);
-	VkPresentModeKHR present_modes[present_mode_count];
-	vkGetPhysicalDeviceSurfacePresentModesKHR(data->physical_device, data->surface,
-						  &present_mode_count,
-						  present_modes);
-	for (int i = 0; i < present_mode_count; i++) {
-		if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
-			data->present_mode =  VK_PRESENT_MODE_MAILBOX_KHR;
-			return success_return;
-		}
-	}
-	data->present_mode = VK_PRESENT_MODE_FIFO_KHR;
-	return success_return;
-}
-
 int engine_setting_swapchain_extent(struct engine_data *data)
 {
 	int width, height;
@@ -349,7 +329,7 @@ int engine_create_swapchain(struct engine_data *data)
 		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		.preTransform = capabilities.currentTransform,
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-		.presentMode = data->present_mode,
+		.presentMode = VK_PRESENT_MODE_FIFO_KHR,
 		.clipped = VK_TRUE,
 		.oldSwapchain = VK_NULL_HANDLE
 	};
@@ -405,7 +385,7 @@ int engine_create_image_views(struct engine_data *data)
 }
 
 
-char *read_file(char *name, int *length)
+char *engine_read_file(char *name, int *length)
 {
 	int fd = open(name, O_RDONLY);
 
@@ -519,9 +499,9 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 {
 	int length_vert;
 	int length_frag;
-	char *vert_shader_code = read_file("shaders/vert.spv", &length_vert);
+	char *vert_shader_code = engine_read_file("shaders/vert.spv", &length_vert);
 
-	char *frag_shader_code = read_file("shaders/frag.spv", &length_frag);
+	char *frag_shader_code = engine_read_file("shaders/frag.spv", &length_frag);
 
 	VkShaderModule vert_shader_module;
 	engine_create_shader_module(data, vert_shader_code, length_vert,
@@ -623,7 +603,7 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 		.depthClampEnable = VK_FALSE,
 		.rasterizerDiscardEnable = VK_FALSE,
 		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = VK_CULL_MODE_BACK_BIT,
+		.cullMode = VK_CULL_MODE_NONE,
 		.frontFace = VK_FRONT_FACE_CLOCKWISE,
 		.lineWidth = 1.0f,
 		.depthBiasEnable = VK_FALSE,
@@ -714,8 +694,10 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 		return error_return;
 	}
 
+	free(attribute_descriptions);
 	free(frag_shader_code);
 	free(vert_shader_code);
+
 	vkDestroyShaderModule(data->device, vert_shader_module, NULL);
 	vkDestroyShaderModule(data->device, frag_shader_module, NULL);
 
@@ -749,7 +731,7 @@ int engine_create_framebuffers(struct engine_data *data)
 	return success_return;
 }
 
-int engine_create_command_pool(struct engine_data *data, int if_buffer_copy_pool)
+int engine_create_command_pool(struct engine_data *data, int is_vertex_buffer_pool)
 {
 	VkCommandPoolCreateInfo command_pool_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -758,10 +740,10 @@ int engine_create_command_pool(struct engine_data *data, int if_buffer_copy_pool
 		.queueFamilyIndex = data->queue_create_infos[0].queueFamilyIndex
 	};
 
-	VkCommandPool *command_pool = &data->command_pool;
-	if(if_buffer_copy_pool) {
+	VkCommandPool *command_pool = &data->graphics_command_pool;
+	if(is_vertex_buffer_pool) {
 		command_pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-		command_pool = &data->buffer_copy_command_pool;
+		command_pool = &data->copy_vertex_buffer_command_pool;
 	}
 	
 	if (vkCreateCommandPool(data->device, &command_pool_info, NULL, command_pool)
@@ -772,7 +754,7 @@ int engine_create_command_pool(struct engine_data *data, int if_buffer_copy_pool
 	return success_return;
 }
 
-int find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties, struct engine_data *data)
+int engine_find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties, struct engine_data *data)
 {
 	VkPhysicalDeviceMemoryProperties memory_properties;
 	vkGetPhysicalDeviceMemoryProperties(data->physical_device, &memory_properties);
@@ -785,14 +767,14 @@ int find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties, str
 	return error_return;
 }
 
-int create_buffer(struct engine_data *data, VkDeviceSize size,
+int engine_create_vertex_buffer(struct engine_data *data, VkDeviceSize size,
 	VkBufferUsageFlags usage,
 	VkMemoryPropertyFlags properties,
 	VkBuffer *buffer,
 	VkDeviceMemory *buffer_memory)
 {
 
-	VkBufferCreateInfo vertex_buffer_create_info = {
+	VkBufferCreateInfo vertices_buffer_create_info = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
@@ -803,7 +785,7 @@ int create_buffer(struct engine_data *data, VkDeviceSize size,
 		.pQueueFamilyIndices = NULL
 	};
 
-	if (vkCreateBuffer(data->device, &vertex_buffer_create_info, NULL, buffer)
+	if (vkCreateBuffer(data->device, &vertices_buffer_create_info, NULL, buffer)
 	    != VK_SUCCESS) {
 		printf("failed to create vertex buffer!");
 		return error_return;
@@ -816,7 +798,7 @@ int create_buffer(struct engine_data *data, VkDeviceSize size,
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.pNext = NULL,
 		.allocationSize = memory_requirements.size,
-		.memoryTypeIndex = find_memory_type(memory_requirements.memoryTypeBits, properties, data)
+		.memoryTypeIndex = engine_find_memory_type(memory_requirements.memoryTypeBits, properties, data)
 	};
 
 	if(vkAllocateMemory(data->device, &allocation_info, NULL, buffer_memory) != VK_SUCCESS) {
@@ -827,23 +809,15 @@ int create_buffer(struct engine_data *data, VkDeviceSize size,
 	return success_return;
 }
 
-void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size, struct engine_data *data)
+void engine_copy_vertex_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size, struct engine_data *data)
 {
 	VkCommandBufferAllocateInfo allocation_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.pNext = NULL,
-		.commandPool = data->buffer_copy_command_pool,
+		.commandPool = data->copy_vertex_buffer_command_pool,
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 		.commandBufferCount = 1
 	};
-
-	VkFenceCreateInfo fence_info = {
-		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-		.pNext = NULL,
-		.flags = 0
-	};
-
-	vkCreateFence(data->device, &fence_info, NULL, &data->vertex_buffer_fence);
 
 	VkCommandBuffer command_buffer;
 	vkAllocateCommandBuffers(data->device, &allocation_info, &command_buffer);
@@ -879,38 +853,38 @@ void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size, st
 		.pSignalSemaphores = NULL
 	};
 
-	vkQueueSubmit(data->graphics_queue, 1, &submit_info, data->vertex_buffer_fence);
+	vkQueueSubmit(data->graphics_queue, 1, &submit_info, data->vertex_buffer_copy_fence);
 
-	vkWaitForFences(data->device, 1, &data->vertex_buffer_fence, VK_TRUE, 0);
+	vkWaitForFences(data->device, 1, &data->vertex_buffer_copy_fence, VK_TRUE, 0);
 
-	vkFreeCommandBuffers(data->device, data->buffer_copy_command_pool, 1, &command_buffer);
-	
-	vkResetFences(data->device, 1, &data->vertex_buffer_fence);
+	vkFreeCommandBuffers(data->device, data->copy_vertex_buffer_command_pool, 1, &command_buffer);
+
+	vkResetFences(data->device, 1, &data->vertex_buffer_copy_fence);
 }
 
-int create_vertex_buffer(struct engine_data *data)
+int engine_create_vertex_buffers(struct engine_data *data)
 {
 	VkDeviceSize buffer_size = sizeof(struct vertex) * vertices_count;
 	
-	create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	engine_create_vertex_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-		      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &data->staging_buffer,
-		      &data->staging_buffer_memory);
+		      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &data->staging_vertex_buffer,
+		      &data->staging_vertex_buffer_memory);
 
 	void* vertex_buffer_data;
-	vkMapMemory(data->device, data->staging_buffer_memory, 0, buffer_size, 0, &vertex_buffer_data);
+	vkMapMemory(data->device, data->staging_vertex_buffer_memory, 0, buffer_size, 0, &vertex_buffer_data);
 	memcpy(vertex_buffer_data, vertices, buffer_size);
-	vkUnmapMemory(data->device, data->staging_buffer_memory);
+	vkUnmapMemory(data->device, data->staging_vertex_buffer_memory);
 
-	create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+	engine_create_vertex_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
 		     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &data->vertex_buffer,
-		     &data->vertex_buffer_memory);
+		     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &data->main_vertex_buffer,
+		     &data->main_vertex_buffer_memory);
 
-	copy_buffer(data->staging_buffer, data->vertex_buffer, buffer_size, data);
+	engine_copy_vertex_buffer(data->staging_vertex_buffer, data->main_vertex_buffer, buffer_size, data);
 
-	vkDestroyBuffer(data->device, data->staging_buffer, NULL);
-	vkFreeMemory(data->device, data->staging_buffer_memory, NULL);
+	vkDestroyBuffer(data->device, data->staging_vertex_buffer, NULL);
+	vkFreeMemory(data->device, data->staging_vertex_buffer_memory, NULL);
 	return success_return;
 }
 
@@ -919,7 +893,7 @@ int engine_create_command_buffers(struct engine_data *data)
 	VkCommandBufferAllocateInfo alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.pNext = NULL,
-		.commandPool = data->command_pool,
+		.commandPool = data->graphics_command_pool,
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 		.commandBufferCount = (uint32_t)MAX_FRAMES_IN_FLIGHT
 	};
@@ -980,7 +954,7 @@ int engine_record_command_buffer(struct engine_data *data)
 	};
 	vkCmdSetScissor(*command_buffer, 0, 1, &scissor);
 
-	VkBuffer vertex_buffers[] = {data->vertex_buffer};
+	VkBuffer vertex_buffers[] = {data->main_vertex_buffer};
 	VkDeviceSize offsets[] = {0};
 
 	vkCmdBindVertexBuffers(*command_buffer, 0, 1, vertex_buffers, offsets);
@@ -1047,7 +1021,6 @@ int engine_recreate_swapchain(struct engine_data *data) {
 	engine_cleanup_swapchain(data);
 
 	engine_set_surface_format(data);
-	engine_setting_present_mode(data);
 	engine_setting_swapchain_extent(data);
 
 	engine_create_swapchain(data);
@@ -1171,10 +1144,7 @@ int main()
 
 	engine_set_surface_format(&data);
 
-	engine_setting_present_mode(&data);
-
 	engine_setting_swapchain_extent(&data);
-
 
 	if (engine_create_swapchain(&data) != success_return) {
 		printf("Failed to create swap chain! Aborting");
@@ -1216,14 +1186,22 @@ int main()
 		return error_return;
 	}
 
-	if(create_vertex_buffer(&data) != success_return) {
+	VkFenceCreateInfo fence_info = {
+		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0
+	};
+
+	vkCreateFence(data.device, &fence_info, NULL, &data.vertex_buffer_copy_fence);
+
+	if(engine_create_vertex_buffers(&data) != success_return) {
 		return error_return;
 	}
 
 	if (engine_create_command_buffers(&data)) {
 		return error_return;
 	}
-
+	
 
 	engine_create_sync_objects(&data);
 	while (!glfwWindowShouldClose(data.window)) {
@@ -1237,9 +1215,15 @@ int main()
 
 	engine_cleanup_swapchain(&data);
 
-	vkDestroyBuffer(data.device, data.staging_buffer, NULL);
+	free(data.swapchain_images);
+	free(data.image_views);
+	free(data.swapchain_framebuffers);
 
-	vkFreeMemory(data.device, data.staging_buffer_memory, NULL);
+	vkDestroyBuffer(data.device, data.main_vertex_buffer, NULL);
+	vkFreeMemory(data.device, data.main_vertex_buffer_memory, NULL);
+
+	vkDestroyFence(data.device, data.vertex_buffer_copy_fence, NULL);
+	vkDestroyCommandPool(data.device, data.copy_vertex_buffer_command_pool, NULL);
 
 	vkDestroyPipeline(data.device, data.graphics_pipeline, NULL);
 	vkDestroyPipelineLayout(data.device, data.pipeline_layout, NULL);
@@ -1252,7 +1236,7 @@ int main()
 		vkDestroyFence(data.device, data.in_flight_fences[i], NULL);
 	}
 
-	vkDestroyCommandPool(data.device, data.command_pool, NULL);
+	vkDestroyCommandPool(data.device, data.graphics_command_pool, NULL);
 
 	vkDestroyDevice(data.device, NULL);
 
