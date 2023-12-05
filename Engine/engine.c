@@ -72,6 +72,7 @@ struct engine_data {
 	VkPipeline graphics_pipeline;
 	VkFramebuffer *swapchain_framebuffers;
 	VkCommandPool command_pool;
+	VkCommandPool buffer_copy_command_pool;
 
 	VkBuffer staging_buffer;
 	VkMemoryRequirements staging_memory_requirements;
@@ -80,6 +81,7 @@ struct engine_data {
 	VkBuffer vertex_buffer;
 	VkMemoryRequirements vertex_memory_requirements;
 	VkDeviceMemory vertex_buffer_memory;
+	VkFence vertex_buffer_fence;
 
 	VkCommandBuffer command_buffers[2];
 	uint32_t image_index;
@@ -747,7 +749,7 @@ int engine_create_framebuffers(struct engine_data *data)
 	return success_return;
 }
 
-int engine_create_command_pool(struct engine_data *data)
+int engine_create_command_pool(struct engine_data *data, int if_buffer_copy_pool)
 {
 	VkCommandPoolCreateInfo command_pool_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -756,7 +758,13 @@ int engine_create_command_pool(struct engine_data *data)
 		.queueFamilyIndex = data->queue_create_infos[0].queueFamilyIndex
 	};
 
-	if (vkCreateCommandPool(data->device, &command_pool_info, NULL, &data->command_pool)
+	VkCommandPool *command_pool = &data->command_pool;
+	if(if_buffer_copy_pool) {
+		command_pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+		command_pool = &data->buffer_copy_command_pool;
+	}
+	
+	if (vkCreateCommandPool(data->device, &command_pool_info, NULL, command_pool)
 	    != VK_SUCCESS) {
 		printf("Failed to create command pool\n");
 		return error_return;
@@ -824,10 +832,18 @@ void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size, st
 	VkCommandBufferAllocateInfo allocation_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.pNext = NULL,
-		.commandPool = data->command_pool, //TOFIX add a separate command pool for this
+		.commandPool = data->buffer_copy_command_pool,
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 		.commandBufferCount = 1
 	};
+
+	VkFenceCreateInfo fence_info = {
+		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0
+	};
+
+	vkCreateFence(data->device, &fence_info, NULL, &data->vertex_buffer_fence);
 
 	VkCommandBuffer command_buffer;
 	vkAllocateCommandBuffers(data->device, &allocation_info, &command_buffer);
@@ -863,9 +879,13 @@ void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size, st
 		.pSignalSemaphores = NULL
 	};
 
-	vkQueueSubmit(data->graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
-	vkQueueWaitIdle(data->graphics_queue); // TOFIX add fence for multiple transfers simultaneously
-	vkFreeCommandBuffers(data->device, data->command_pool, 1, &command_buffer);
+	vkQueueSubmit(data->graphics_queue, 1, &submit_info, data->vertex_buffer_fence);
+
+	vkWaitForFences(data->device, 1, &data->vertex_buffer_fence, VK_TRUE, 0);
+
+	vkFreeCommandBuffers(data->device, data->buffer_copy_command_pool, 1, &command_buffer);
+	
+	vkResetFences(data->device, 1, &data->vertex_buffer_fence);
 }
 
 int create_vertex_buffer(struct engine_data *data)
@@ -1188,7 +1208,11 @@ int main()
 		return error_return;
 	}
 
-	if (engine_create_command_pool(&data) != success_return) {
+	if (engine_create_command_pool(&data, 0) != success_return) {
+		return error_return;
+	}
+
+	if (engine_create_command_pool(&data, 1) != success_return) {
 		return error_return;
 	}
 
