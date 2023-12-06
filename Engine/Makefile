@@ -7,7 +7,7 @@ compile: engine.c
 .PHONY: test clean
 
 test:	compile
-	ASAN_OPTIONS=fast_unwind_on_malloc=0 ./engine
+	./engine
 
 clean:
 	rm -f VulkanTest

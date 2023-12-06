@@ -20,6 +20,8 @@
 
 #define GLFW_INCLUDE_VULKAN
 
+#define UNLIKELY(expression) __builtin_expect (expression, 0)
+
 unsigned int WIDTH = 800;
 unsigned int HEIGHT = 600;
 
@@ -39,10 +41,10 @@ struct vertex {
 	float color[3];
 };
 
-int vertices_count = 3;
-const struct vertex vertices[3] = {
-	{{0.0f, 0.2f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, 1.0f}, {0.0f, 1.0f, 0.0f}},
+int vertices_count = 6;
+const struct vertex vertices[6] = {
+	{{0.0f, 0.1f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
 	{{-0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}}
 };
 
@@ -166,7 +168,7 @@ int engine_create_vulkan_instance(struct engine_data *data)
 		.ppEnabledExtensionNames = extension_list
 	};
 
-	if (vkCreateInstance(&create_info, NULL, &data->instance) != VK_SUCCESS) {
+	if (UNLIKELY(vkCreateInstance(&create_info, NULL, &data->instance) != VK_SUCCESS)) {
 		printf("Failed to create instance!\n");
 		return error_return;
 	}
@@ -176,13 +178,13 @@ int engine_create_vulkan_instance(struct engine_data *data)
 int engine_pick_physical_device(struct engine_data *data)
 {
 	uint32_t p_device_count = 0;
-	if (vkEnumeratePhysicalDevices(data->instance, &p_device_count,
-				       NULL) != VK_SUCCESS)
+	if (UNLIKELY(vkEnumeratePhysicalDevices(data->instance, &p_device_count,
+				       NULL) != VK_SUCCESS))
 		return error_return;
 
 	VkPhysicalDevice p_device_list[p_device_count];
-	if (vkEnumeratePhysicalDevices(data->instance, &p_device_count,
-				       p_device_list) != VK_SUCCESS)
+	if (UNLIKELY(vkEnumeratePhysicalDevices(data->instance, &p_device_count,
+				       p_device_list) != VK_SUCCESS))
 		return error_return;
 
 	int best_index = -1;
@@ -269,8 +271,8 @@ int engine_create_device(struct engine_data *data)
 		.ppEnabledExtensionNames = device_extension_list,
 		.pEnabledFeatures = &data->physical_device_features
 	};
-	if (vkCreateDevice(data->physical_device, &create_info, NULL, &data->device) != VK_SUCCESS) {
-		printf("failed to create device!");
+	if (UNLIKELY(vkCreateDevice(data->physical_device, &create_info, NULL, &data->device) != VK_SUCCESS)) {
+		printf("failed to create device!\n");
 		return error_return;
 	}
 	return success_return;
@@ -308,8 +310,8 @@ int engine_setting_swapchain_extent(struct engine_data *data)
 int engine_create_swapchain(struct engine_data *data)
 {
 	VkSurfaceCapabilitiesKHR capabilities;
-	if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(data->physical_device, data->surface,
-						  &capabilities) != VK_SUCCESS) {
+	if (UNLIKELY(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(data->physical_device, data->surface,
+						  &capabilities) != VK_SUCCESS)) {
 		printf("Failed to get physical device surface capabilities!\n");
 		return error_return;
 	}
@@ -351,7 +353,8 @@ int engine_create_swapchain(struct engine_data *data)
 		create_info.pQueueFamilyIndices = &queue_families_indices[0];
 	}
 
-	if (vkCreateSwapchainKHR(data->device, &create_info, NULL, &data->swapchain) != VK_SUCCESS) {
+	if (UNLIKELY(vkCreateSwapchainKHR(data->device, &create_info, NULL, &data->swapchain) != VK_SUCCESS)) {
+		printf("failed to create swapchain!\n");
 		return error_return;
 	}
 	return success_return;
@@ -381,7 +384,7 @@ int engine_create_image_views(struct engine_data *data)
 				.layerCount = 1
 			}
 		};
-		if (vkCreateImageView(data->device, &create_info, NULL, &data->image_views[i]) != VK_SUCCESS) {
+		if (UNLIKELY(vkCreateImageView(data->device, &create_info, NULL, &data->image_views[i]) != VK_SUCCESS)) {
 			return error_return;
 		}
 	}
@@ -431,7 +434,7 @@ int engine_create_shader_module(struct engine_data *data, const char *code, int 
 		.pCode = (uint *)code
 	};
 
-	if (vkCreateShaderModule(data->device, &create_info, NULL, shader_module) != VK_SUCCESS) {
+	if (UNLIKELY(vkCreateShaderModule(data->device, &create_info, NULL, shader_module) != VK_SUCCESS)) {
 		printf("Failed to create Shader Module");
 		return error_return;
 	}
@@ -492,8 +495,7 @@ int engine_create_render_pass(struct engine_data *data)
 		.pDependencies = &dependency
 	};
 
-
-	if (vkCreateRenderPass(data->device, &render_pass_info, NULL, &data->render_pass) != VK_SUCCESS) {
+	if (UNLIKELY(vkCreateRenderPass(data->device, &render_pass_info, NULL, &data->render_pass) != VK_SUCCESS)) {
 		return error_return;
 	}
 	return success_return;
@@ -662,8 +664,8 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 		.pPushConstantRanges = NULL
 	};
 
-	if (vkCreatePipelineLayout(data->device, &pipeline_layout_info, NULL,
-				   &data->pipeline_layout) != VK_SUCCESS) {
+	if (UNLIKELY(vkCreatePipelineLayout(data->device, &pipeline_layout_info, NULL,
+				   &data->pipeline_layout) != VK_SUCCESS)) {
 		printf("Failed to create pipeline layout!");
 		return error_return;
 	};
@@ -690,9 +692,9 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 		.basePipelineIndex = -1
 	};
 
-	if (vkCreateGraphicsPipelines(data->device, VK_NULL_HANDLE, 1,
-				      &pipeline_info, NULL, &data->graphics_pipeline)
-	    != VK_SUCCESS) {
+	if (UNLIKELY(vkCreateGraphicsPipelines(data->device, VK_NULL_HANDLE, 1,
+				      &pipeline_info, NULL, &data->graphics_pipeline) 
+		     != VK_SUCCESS)) {
 		printf("failed to create graphics pipeline!");
 		return error_return;
 	}
@@ -725,8 +727,8 @@ int engine_create_framebuffers(struct engine_data *data)
 			.height = data->extent.height,
 			.layers = 1
 		};
-		if (vkCreateFramebuffer(data->device, &framebuffer_info, 0,
-		  		       &data->swapchain_framebuffers[i]) != VK_SUCCESS) {
+		if (UNLIKELY(vkCreateFramebuffer(data->device, &framebuffer_info, 0,
+		  		       &data->swapchain_framebuffers[i]) != VK_SUCCESS)) {
 			printf("Failed to create framebuffer!\n");
 			return error_return;
 		}
@@ -749,8 +751,8 @@ int engine_create_command_pool(struct engine_data *data, int is_vertex_buffer_po
 		command_pool = &data->copy_vertex_buffer_command_pool;
 	}
 	
-	if (vkCreateCommandPool(data->device, &command_pool_info, NULL, command_pool)
-	    != VK_SUCCESS) {
+	if (UNLIKELY(vkCreateCommandPool(data->device, &command_pool_info, NULL, command_pool)
+	    != VK_SUCCESS)) {
 		printf("Failed to create command pool\n");
 		return error_return;
 	}
@@ -803,7 +805,7 @@ int engine_create_vertex_buffer(struct engine_data *data, VkDeviceSize size,
 		.memoryTypeIndex = engine_find_memory_type(memory_requirements.memoryTypeBits, properties, data)
 	};
 
-	if(vkAllocateMemory(data->device, &allocation_info, NULL, buffer_memory) != VK_SUCCESS) {
+	if(UNLIKELY(vkAllocateMemory(data->device, &allocation_info, NULL, buffer_memory) != VK_SUCCESS)) {
 		printf("Failed to allocate vertex buffer memory!");
 		return error_return;
 	}
@@ -857,7 +859,7 @@ void engine_copy_vertex_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDevic
 
 	vkQueueSubmit(data->graphics_queue, 1, &submit_info, data->vertex_buffer_copy_fence);
 
-	vkWaitForFences(data->device, 1, &data->vertex_buffer_copy_fence, VK_TRUE, 0);
+	vkWaitForFences(data->device, 1, &data->vertex_buffer_copy_fence, VK_TRUE, UINT64_MAX);
 
 	vkFreeCommandBuffers(data->device, data->copy_vertex_buffer_command_pool, 1, &command_buffer);
 
@@ -917,7 +919,7 @@ int engine_record_command_buffer(struct engine_data *data)
 		.pInheritanceInfo = NULL,
 	};
 	VkCommandBuffer *command_buffer = &data->command_buffers[data->current_frame];
-	if (vkBeginCommandBuffer(*command_buffer, &begin_info) != VK_SUCCESS) {
+	if (UNLIKELY(vkBeginCommandBuffer(*command_buffer, &begin_info) != VK_SUCCESS)) {
 		printf("Failed to create begin recording command buffer!\n");
 		return error_return;
 	}
@@ -966,7 +968,7 @@ int engine_record_command_buffer(struct engine_data *data)
 
 	vkCmdEndRenderPass(*command_buffer);
 
-	if (vkEndCommandBuffer(*command_buffer) != VK_SUCCESS) {
+	if (UNLIKELY(vkEndCommandBuffer(*command_buffer) != VK_SUCCESS)) {
 		printf("failed to record command buffer");
 		return error_return;
 	}
@@ -988,9 +990,9 @@ int engine_create_sync_objects(struct engine_data *data)
 	};
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		if (vkCreateSemaphore(data->device, &semaphore_create_info, NULL, &data->image_available_semaphores[i]) != VK_SUCCESS ||
-		    vkCreateSemaphore(data->device, &semaphore_create_info, NULL, &data->render_finished_semaphores[i]) != VK_SUCCESS ||
-		    vkCreateFence(data->device, &fence_info, NULL, &data->in_flight_fences[i]) != VK_SUCCESS) {
+		if (UNLIKELY(vkCreateSemaphore(data->device, &semaphore_create_info, NULL, &data->image_available_semaphores[i]) != VK_SUCCESS) ||
+		    UNLIKELY(vkCreateSemaphore(data->device, &semaphore_create_info, NULL, &data->render_finished_semaphores[i]) != VK_SUCCESS) ||
+		    UNLIKELY(vkCreateFence(data->device, &fence_info, NULL, &data->in_flight_fences[i]) != VK_SUCCESS)) {
 			printf("failed to create synchronization objects for a frame!");
 			return error_return;
 		}
@@ -1075,7 +1077,8 @@ int engine_draw_frame(struct engine_data *data)
 		.signalSemaphoreCount = 1,
 		.pSignalSemaphores = signal_semaphores
 	};
-	if (vkQueueSubmit(data->graphics_queue, 1, &submit_info, data->in_flight_fences[data->current_frame]) != VK_SUCCESS) {
+
+	if (UNLIKELY(vkQueueSubmit(data->graphics_queue, 1, &submit_info, data->in_flight_fences[data->current_frame]) != VK_SUCCESS)) {
 		printf("failed to submit draw command buffer!");
 		return error_return;
 	}
@@ -1096,7 +1099,7 @@ int engine_draw_frame(struct engine_data *data)
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
 		framebuffer_resized = 0;
 		engine_recreate_swapchain(data);
-	} else if (result != VK_SUCCESS) {
+	} else if (UNLIKELY(result != VK_SUCCESS)) {
 		printf("failed to present swap chain image!");
 		return error_return;
 	}
@@ -1113,7 +1116,7 @@ int main()
 		return error_return;
 	}
 
-	if (glfwCreateWindowSurface(data.instance, data.window, NULL, &data.surface) != VK_SUCCESS) {
+	if (UNLIKELY(glfwCreateWindowSurface(data.instance, data.window, NULL, &data.surface) != VK_SUCCESS)) {
 		printf("Failed to create window surface!");
 		return error_return;
 	}
