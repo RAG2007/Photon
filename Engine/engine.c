@@ -23,7 +23,7 @@
 #define UNLIKELY(expression) __builtin_expect (expression, 0)
 
 unsigned int WIDTH = 800;
-unsigned int HEIGHT = 600;
+unsigned int HEIGHT = 800;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -41,11 +41,11 @@ struct vertex {
 	float color[3];
 };
 
-int vertices_count = 6;
-const struct vertex vertices[6] = {
-	{{0.0f, 0.1f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{-0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}}
+int vertices_count = 3;
+const struct vertex vertices[3] = {
+	{{1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
+	{{-1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
+	{{1.0f, -1.0f}, {0.0f, 0.0f, 1.0f}}
 };
 
 struct engine_data {
@@ -89,11 +89,6 @@ struct engine_data {
 	VkSemaphore render_finished_semaphores[2];
 	VkFence in_flight_fences[2];
 	uint32_t current_frame;
-};
-
-enum vertex_buffers {
-	staging_vertex_buffer_enum,
-	main_vertex_buffer_enum
 };
 
 int framebuffer_resized = 0;
