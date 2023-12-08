@@ -1043,11 +1043,11 @@ int engine_draw_frame(struct engine_data *data)
 
 	VkResult result = vkAcquireNextImageKHR(data->device, data->swapchain, UINT64_MAX, data->image_available_semaphores[data->current_frame], VK_NULL_HANDLE, &data->image_index);
 
-	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
-		framebuffer_resized = 0;
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || framebuffer_resized) {
 		engine_recreate_swapchain(data);
-	} else if (UNLIKELY(result != VK_SUCCESS)) {
-		printf("failed to present swap chain image!\n");
+		return success_return;
+	} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		printf("failed to acquire swap chain image!\n");
 		return error_return;
 	}
 
@@ -1090,6 +1090,13 @@ int engine_draw_frame(struct engine_data *data)
 	};
 	result = vkQueuePresentKHR(data->present_queue, &present_info);
 
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
+		framebuffer_resized = 0;
+		engine_recreate_swapchain(data);
+	} else if (UNLIKELY(result != VK_SUCCESS)) {
+		printf("failed to present swap chain image!\n");
+		return error_return;
+	}
 	return success_return;
 }
 
