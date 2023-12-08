@@ -244,7 +244,6 @@ int engine_find_queue_families(struct engine_data *data)
 		.queueCount = 1,
 		.pQueuePriorities = &queue_priorities
 	};
-
 	return success_return;
 }
 
@@ -430,7 +429,7 @@ int engine_create_shader_module(struct engine_data *data, const char *code, int 
 	};
 
 	if (UNLIKELY(vkCreateShaderModule(data->device, &create_info, NULL, shader_module) != VK_SUCCESS)) {
-		printf("Failed to create Shader Module");
+		printf("Failed to create Shader Module\n");
 		return error_return;
 	}
 	return success_return;
@@ -661,7 +660,7 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 
 	if (UNLIKELY(vkCreatePipelineLayout(data->device, &pipeline_layout_info, NULL,
 				   &data->pipeline_layout) != VK_SUCCESS)) {
-		printf("Failed to create pipeline layout!");
+		printf("Failed to create pipeline layout!\n");
 		return error_return;
 	};
 
@@ -690,7 +689,7 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 	if (UNLIKELY(vkCreateGraphicsPipelines(data->device, VK_NULL_HANDLE, 1,
 				      &pipeline_info, NULL, &data->graphics_pipeline) 
 		     != VK_SUCCESS)) {
-		printf("failed to create graphics pipeline!");
+		printf("failed to create graphics pipeline!\n");
 		return error_return;
 	}
 
@@ -763,7 +762,7 @@ int engine_find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properti
 		if (type_filter & (1 << i) && (memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
 			return i;
 	}
-	printf("failed to find suitable memory type!");
+	printf("failed to find suitable memory type!\n");
 	return error_return;
 }
 
@@ -786,7 +785,7 @@ int engine_create_vertex_buffer(struct engine_data *data, VkDeviceSize size,
 
 	if (vkCreateBuffer(data->device, &vertices_buffer_create_info, NULL, buffer)
 	    != VK_SUCCESS) {
-		printf("failed to create vertex buffer!");
+		printf("failed to create vertex buffer!\n");
 		return error_return;
 	}
 
@@ -801,7 +800,7 @@ int engine_create_vertex_buffer(struct engine_data *data, VkDeviceSize size,
 	};
 
 	if(UNLIKELY(vkAllocateMemory(data->device, &allocation_info, NULL, buffer_memory) != VK_SUCCESS)) {
-		printf("Failed to allocate vertex buffer memory!");
+		printf("Failed to allocate vertex buffer memory!\n");
 		return error_return;
 	}
 	vkBindBufferMemory(data->device, *buffer, *buffer_memory, 0);
@@ -964,7 +963,7 @@ int engine_record_command_buffer(struct engine_data *data)
 	vkCmdEndRenderPass(*command_buffer);
 
 	if (UNLIKELY(vkEndCommandBuffer(*command_buffer) != VK_SUCCESS)) {
-		printf("failed to record command buffer");
+		printf("failed to record command buffer!\n");
 		return error_return;
 	}
 	return success_return;
@@ -988,7 +987,7 @@ int engine_create_sync_objects(struct engine_data *data)
 		if (UNLIKELY(vkCreateSemaphore(data->device, &semaphore_create_info, NULL, &data->image_available_semaphores[i]) != VK_SUCCESS) ||
 		    UNLIKELY(vkCreateSemaphore(data->device, &semaphore_create_info, NULL, &data->render_finished_semaphores[i]) != VK_SUCCESS) ||
 		    UNLIKELY(vkCreateFence(data->device, &fence_info, NULL, &data->in_flight_fences[i]) != VK_SUCCESS)) {
-			printf("failed to create synchronization objects for a frame!");
+			printf("failed to create synchronization objects for a frame!\n");
 			return error_return;
 		}
 	}
@@ -1044,11 +1043,11 @@ int engine_draw_frame(struct engine_data *data)
 
 	VkResult result = vkAcquireNextImageKHR(data->device, data->swapchain, UINT64_MAX, data->image_available_semaphores[data->current_frame], VK_NULL_HANDLE, &data->image_index);
 
-	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
+		framebuffer_resized = 0;
 		engine_recreate_swapchain(data);
-		return success_return;
-	} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-		printf("failed to acquire swap chain image!");
+	} else if (UNLIKELY(result != VK_SUCCESS)) {
+		printf("failed to present swap chain image!\n");
 		return error_return;
 	}
 
@@ -1074,7 +1073,7 @@ int engine_draw_frame(struct engine_data *data)
 	};
 
 	if (UNLIKELY(vkQueueSubmit(data->graphics_queue, 1, &submit_info, data->in_flight_fences[data->current_frame]) != VK_SUCCESS)) {
-		printf("failed to submit draw command buffer!");
+		printf("failed to submit draw command buffer!\n");
 		return error_return;
 	}
 	VkSwapchainKHR swapchains[] = {data->swapchain};
@@ -1091,15 +1090,9 @@ int engine_draw_frame(struct engine_data *data)
 	};
 	result = vkQueuePresentKHR(data->present_queue, &present_info);
 
-	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
-		framebuffer_resized = 0;
-		engine_recreate_swapchain(data);
-	} else if (UNLIKELY(result != VK_SUCCESS)) {
-		printf("failed to present swap chain image!");
-		return error_return;
-	}
 	return success_return;
 }
+
 
 int main()
 {
@@ -1112,12 +1105,12 @@ int main()
 	}
 
 	if (UNLIKELY(glfwCreateWindowSurface(data.instance, data.window, NULL, &data.surface) != VK_SUCCESS)) {
-		printf("Failed to create window surface!");
+		printf("Failed to create window surface!\n");
 		return error_return;
 	}
 
 	if (engine_pick_physical_device(&data) != success_return) {
-		printf("Unable to pick device! Aborting");
+		printf("Unable to pick device! Aborting!\n");
 		return error_return;
 	}
 
@@ -1125,7 +1118,7 @@ int main()
 	vkGetPhysicalDeviceProperties(data.physical_device, &data.physical_device_properties);
 
 	if (engine_find_queue_families(&data) != success_return) {
-		printf("Failed to find appropriate queue families");
+		printf("Failed to find appropriate queue families!\n");
 		return error_return;
 	}
 
@@ -1144,7 +1137,7 @@ int main()
 	engine_setting_swapchain_extent(&data);
 
 	if (engine_create_swapchain(&data) != success_return) {
-		printf("Failed to create swap chain! Aborting");
+		printf("Failed to create swap chain! Aborting!\n");
 		return error_return;
 	}
 
@@ -1156,13 +1149,13 @@ int main()
 	data.swapchain_framebuffers = malloc(sizeof(VkFramebuffer) * data.swapchain_image_count);
 
 	if (engine_create_image_views(&data) != success_return) {
-		printf("Failed to create Image Views");
+		printf("Failed to create Image Views\n");
 		return error_return;
 	}
 
 	if (engine_create_render_pass(&data) !=
 	   success_return) {
-		printf("failed to create render pass!");
+		printf("failed to create render pass!\n");
 		return error_return;
 	}
 
