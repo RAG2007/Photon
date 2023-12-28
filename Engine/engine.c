@@ -1,12 +1,9 @@
-#include <stddef.h>
 #include <stdio.h>
-#include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
 
