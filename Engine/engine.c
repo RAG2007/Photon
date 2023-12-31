@@ -19,8 +19,8 @@
 
 #define UNLIKELY(expression) __builtin_expect (expression, 0)
 
-unsigned int WIDTH = 800;
-unsigned int HEIGHT = 800;
+unsigned int WIDTH = 1000;
+unsigned int HEIGHT = 1000;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -34,21 +34,23 @@ struct queue_family_indices {
 };
 
 struct vertex {
-	float position[2];
+	float position[3];
 	float color[3];
 };
 
-int vertices_count = 4;
-const struct vertex vertices[] = {
-	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+int triangle_vertices_count = 6;
+const struct vertex triangle_vertices[] = {
+	{{-0.5f, -0.5f, 0.2f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.5f, 0.2f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, 0.5f, 0.2f}, {1.0f, 0.0f, 0.0f}},
+	{{-1.0f, -0.5f, 0.1f}, {0.0f, 0.0f, 1.0f}},
+	{{-0.5f, 0.5f, 0.1f}, {0.0f, 0.0f, 1.0f}},
+	{{0.5f, -0.5f, 0.1f}, {0.0f, 0.0f, 1.0f}}
 };
 
-uint32_t index_count = 6;
-const uint32_t indices[] = {
-	0, 1, 2, 2, 3, 0
+uint32_t triangle_index_count = 6;
+const uint32_t triangle_indices[] = {
+	0, 1, 2, 3, 4, 5
 };
 
 struct engine_data {
@@ -87,6 +89,10 @@ struct engine_data {
 	VkDeviceMemory main_vertex_buffer_memory;
 	VkDeviceMemory main_index_buffer_memory;
 	VkFence vertex_buffer_copy_fence;
+	VkImage depth_image;
+	VkDeviceMemory depth_image_memory;
+	VkImageView depth_image_view;
+	VkFormat depth_format;
 
 	VkCommandBuffer command_buffers[2];
 	uint32_t image_index;
@@ -116,7 +122,7 @@ VkVertexInputAttributeDescription *get_vertex_input_attribute_description()
 	attribute_descriptions[0] = (VkVertexInputAttributeDescription){
 		.location = 0,
 		.binding = 0,
-		.format = VK_FORMAT_R32G32_SFLOAT,
+		.format = VK_FORMAT_R32G32B32_SFLOAT,
 		.offset = offsetof(struct vertex, position)
 	};
 	attribute_descriptions[1] = (VkVertexInputAttributeDescription){
@@ -359,34 +365,31 @@ int engine_create_swapchain(struct engine_data *data)
 	return success_return;
 }
 
-int engine_create_image_views(struct engine_data *data)
+int engine_create_image_view(struct engine_data *data, VkImage image, VkFormat format, VkImageView *image_view)
 {
-	for (int i = 0; i < data->swapchain_image_count; i++) {
-		VkImageViewCreateInfo create_info = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.pNext = NULL,
-			.flags = 0,
-			.image = data->swapchain_images[i],
-			.viewType = VK_IMAGE_VIEW_TYPE_2D,
-			.format = data->surface_format.format,
-			.components = {
-				.r = VK_COMPONENT_SWIZZLE_IDENTITY,
-				.g = VK_COMPONENT_SWIZZLE_IDENTITY,
-				.b = VK_COMPONENT_SWIZZLE_IDENTITY,
-				.a = VK_COMPONENT_SWIZZLE_IDENTITY
-			},
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			}
-		};
-		if (UNLIKELY(vkCreateImageView(data->device, &create_info, NULL, &data->image_views[i]) != VK_SUCCESS)) {
-			return error_return;
+	VkImageViewCreateInfo create_info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0,
+		.image = image,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = format, //data->surface_format.format
+		.components = {
+			.r = VK_COMPONENT_SWIZZLE_IDENTITY,
+			.g = VK_COMPONENT_SWIZZLE_IDENTITY,
+			.b = VK_COMPONENT_SWIZZLE_IDENTITY,
+			.a = VK_COMPONENT_SWIZZLE_IDENTITY
+		},
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1
 		}
-	}
+	};
+	if (UNLIKELY(vkCreateImageView(data->device, &create_info, NULL, image_view) != VK_SUCCESS))
+		return error_return;
 	return success_return;
 }
 
@@ -440,6 +443,17 @@ int engine_create_shader_module(struct engine_data *data, const char *code, int 
 	return success_return;
 }
 
+int engine_find_supported_depth_format(struct engine_data *data, VkFormat *format) {
+	VkFormatProperties properties;
+	VkFormatFeatureFlags features = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	vkGetPhysicalDeviceFormatProperties(data->physical_device, VK_FORMAT_D32_SFLOAT,&properties);
+	if ((properties.optimalTilingFeatures & features) == features) {
+		*format = VK_FORMAT_D32_SFLOAT;
+		return success_return;
+	}
+	return error_return;
+}
+
 int engine_create_render_pass(struct engine_data *data)
 {
 	VkAttachmentDescription color_attachment = {
@@ -453,10 +467,28 @@ int engine_create_render_pass(struct engine_data *data)
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 	};
+	VkFormat depth_format;
+	engine_find_supported_depth_format(data, &depth_format);
+	VkAttachmentDescription depth_attachment = {
+		.format = depth_format,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	};
+        
 
 	VkAttachmentReference color_attachment_ref = {
 		.attachment = 0,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	};
+
+	VkAttachmentReference depth_attachment_ref = {
+		.attachment = 1,
+		.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 	};
 
 	VkSubpassDescription subpass = {
@@ -467,7 +499,7 @@ int engine_create_render_pass(struct engine_data *data)
 		.colorAttachmentCount = 1,
 		.pColorAttachments = &color_attachment_ref,
 		.pResolveAttachments = NULL,
-		.pDepthStencilAttachment = NULL,
+		.pDepthStencilAttachment = &depth_attachment_ref,
 		.preserveAttachmentCount = 0,
 		.pPreserveAttachments = NULL
 	};
@@ -475,19 +507,24 @@ int engine_create_render_pass(struct engine_data *data)
 	VkSubpassDependency dependency = {
 		.srcSubpass = VK_SUBPASS_EXTERNAL,
 		.dstSubpass = 0,
-		.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
 		.srcAccessMask = 0,
-		.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+		.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		.dependencyFlags = 0
+	};
+
+	VkAttachmentDescription attachments[] = {
+	color_attachment,
+	depth_attachment
 	};
 
 	VkRenderPassCreateInfo render_pass_info = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
-		.attachmentCount = 1,
-		.pAttachments = &color_attachment,
+		.attachmentCount = 2,
+		.pAttachments = attachments,
 		.subpassCount = 1,
 		.pSubpasses = &subpass,
 		.dependencyCount = 1,
@@ -504,9 +541,9 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 {
 	int length_vert;
 	int length_frag;
-	char *vert_shader_code = engine_read_file("shaders/vert.spv", &length_vert);
+	char *vert_shader_code = engine_read_file("shaders/tr-vert.spv", &length_vert);
 
-	char *frag_shader_code = engine_read_file("shaders/frag.spv", &length_frag);
+	char *frag_shader_code = engine_read_file("shaders/tr-frag.spv", &length_frag);
 
 	VkShaderModule vert_shader_module;
 	engine_create_shader_module(data, vert_shader_code, length_vert,
@@ -628,6 +665,15 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 		.alphaToOneEnable = VK_FALSE,
 	};
 
+	VkPipelineDepthStencilStateCreateInfo depth_stencil = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.depthBoundsTestEnable = VK_FALSE,
+		.stencilTestEnable = VK_FALSE
+	};
+
 	VkPipelineColorBlendAttachmentState color_blend_attachment = {
 		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
 				  VK_COLOR_COMPONENT_G_BIT |
@@ -681,7 +727,7 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 		.pViewportState = &viewport_state,
 		.pRasterizationState = &rasterizer,
 		.pMultisampleState = &multisampling,
-		.pDepthStencilState = NULL,
+		.pDepthStencilState = &depth_stencil,
 		.pColorBlendState = &color_blending,
 		.pDynamicState = &dynamic_state,
 		.layout = data->pipeline_layout,
@@ -712,7 +758,8 @@ int engine_create_framebuffers(struct engine_data *data)
 {
 	for (int i = 0; i < data->swapchain_image_count; i++) {
 		VkImageView attachments[] = {
-			data->image_views[i]
+			data->image_views[i],
+			data->depth_image_view
 		};
 
 		VkFramebufferCreateInfo framebuffer_info = {
@@ -720,7 +767,7 @@ int engine_create_framebuffers(struct engine_data *data)
 			.pNext = NULL,
 			.flags = 0,
 			.renderPass = data->render_pass,
-			.attachmentCount = 1,
+			.attachmentCount = 2,
 			.pAttachments = attachments,
 			.width = data->extent.width,
 			.height = data->extent.height,
@@ -770,6 +817,61 @@ int engine_find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properti
 	printf("failed to find suitable memory type!\n");
 	return error_return;
 }
+
+int engine_create_image(struct engine_data *data, uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage *image, VkDeviceMemory *image_memory) {
+	VkImageCreateInfo imageInfo = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.extent.width = width,
+		.extent.height = height,
+		.extent.depth = 1,
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.format = format,
+		.tiling = tiling,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.usage = usage,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+	};
+
+	if (vkCreateImage(data->device, &imageInfo, NULL, image) != VK_SUCCESS) {
+		printf("failed to create image!");
+		return error_return;
+	}
+
+	VkMemoryRequirements memRequirements;
+	vkGetImageMemoryRequirements(data->device, *image, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo =  {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.allocationSize = memRequirements.size,
+		.memoryTypeIndex = engine_find_memory_type(memRequirements.memoryTypeBits, properties, data),
+	};
+
+	if (vkAllocateMemory(data->device, &allocInfo, NULL, image_memory) != VK_SUCCESS) {
+		printf("failed to allocate image memory!");
+		return error_return;
+	}
+
+	vkBindImageMemory(data->device, *image, *image_memory, 0);
+	return success_return;
+}
+
+int engine_create_depth_resources(struct engine_data *data) {
+	VkFormat format;
+	if(engine_find_supported_depth_format(data, &format) != success_return) {
+		printf("failed to get supported format");
+		return error_return;
+	}
+	engine_create_image(data, data->extent.width, data->extent.height, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &data->depth_image, &data->depth_image_memory);
+	if(engine_create_image_view(data, data->depth_image, format, &data->depth_image_view) != success_return) {
+		printf("failed to create image view");
+		return error_return;
+	}
+	return success_return;
+}
+
 
 int engine_create_buffer(struct engine_data *data, VkDeviceSize size,
 	VkBufferUsageFlags usage,
@@ -867,7 +969,7 @@ void engine_copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize s
 
 int engine_create_vertex_buffers(struct engine_data *data)
 {
-	VkDeviceSize buffer_size = sizeof(struct vertex) * vertices_count;
+	VkDeviceSize buffer_size = sizeof(struct vertex) * triangle_vertices_count;
 	
 	engine_create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -876,7 +978,7 @@ int engine_create_vertex_buffers(struct engine_data *data)
 
 	void* vertex_buffer_data;
 	vkMapMemory(data->device, data->staging_buffer_memory, 0, buffer_size, 0, &vertex_buffer_data);
-	memcpy(vertex_buffer_data, vertices, buffer_size);
+	memcpy(vertex_buffer_data, triangle_vertices, buffer_size);
 	vkUnmapMemory(data->device, data->staging_buffer_memory);
 
 	engine_create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
@@ -893,7 +995,7 @@ int engine_create_vertex_buffers(struct engine_data *data)
 
 int engine_create_index_buffers(struct engine_data *data)
 {
-	VkDeviceSize buffer_size = sizeof(uint32_t) * index_count;
+	VkDeviceSize buffer_size = sizeof(uint32_t) * triangle_index_count;
 	
 	engine_create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 			     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -903,7 +1005,7 @@ int engine_create_index_buffers(struct engine_data *data)
 
 	void* index_buffer_data;
 	vkMapMemory(data->device, data->staging_buffer_memory, 0, buffer_size, 0, &index_buffer_data);
-	memcpy(index_buffer_data, indices, buffer_size);
+	memcpy(index_buffer_data, triangle_indices, buffer_size);
 	vkUnmapMemory(data->device, data->staging_buffer_memory);
 
 	engine_create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
@@ -951,7 +1053,10 @@ int engine_record_command_buffer(struct engine_data *data)
 		return error_return;
 	}
 
-	VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+	VkClearValue clear_values[2];
+        clear_values[0].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 1.0f}};
+        clear_values[1].depthStencil = (VkClearDepthStencilValue){1.0f, 0.0f};
+
 	VkRenderPassBeginInfo render_pass_info = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		.pNext = NULL,
@@ -961,8 +1066,8 @@ int engine_record_command_buffer(struct engine_data *data)
 			.offset = {0, 0},
 			.extent = data->extent
 		},
-		.clearValueCount = 1,
-		.pClearValues = &clear_color
+		.clearValueCount = 2,
+		.pClearValues = clear_values
 	};
 
 	vkCmdBeginRenderPass(*command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
@@ -993,7 +1098,7 @@ int engine_record_command_buffer(struct engine_data *data)
 
 	vkCmdBindIndexBuffer(*command_buffer, data->main_index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
-	vkCmdDrawIndexed(*command_buffer, index_count, 1, 0, 0, 0);
+	vkCmdDrawIndexed(*command_buffer, triangle_index_count, 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(*command_buffer);
 
@@ -1065,9 +1170,12 @@ int engine_recreate_swapchain(struct engine_data *data)
 
 	data->image_views = malloc(sizeof(VkImageView) * data->swapchain_image_count);
 	data->swapchain_framebuffers = malloc(sizeof(VkFramebuffer) * data->swapchain_image_count);
-
-	engine_create_image_views(data);
-
+	for(int i = 0; i < data->swapchain_image_count; i++) {
+		if(engine_create_image_view(data, data->swapchain_images[i], data->surface_format.format, &data->image_views[i]) != success_return) {
+			printf("Failed to recreate Image Views\n");
+			return error_return;
+		}
+	}
 	engine_create_framebuffers(data);
 	return success_return;
 }
@@ -1190,9 +1298,11 @@ int main()
 	data.image_views = malloc(sizeof(VkImageView) * data.swapchain_image_count);
 	data.swapchain_framebuffers = malloc(sizeof(VkFramebuffer) * data.swapchain_image_count);
 
-	if (engine_create_image_views(&data) != success_return) {
-		printf("Failed to create Image Views\n");
-		return error_return;
+	for(int i = 0; i < data.swapchain_image_count; i++) {
+		if(engine_create_image_view(&data, data.swapchain_images[i], data.surface_format.format, &data.image_views[i]) != success_return) {
+			printf("Failed to create Image Views\n");
+			return error_return;
+		}
 	}
 
 	if (engine_create_render_pass(&data) !=
@@ -1206,15 +1316,19 @@ int main()
 		return error_return;
 	}
 
-	if (engine_create_framebuffers(&data) != success_return) {
-		return error_return;
-	}
-
 	if (engine_create_command_pool(&data, 0) != success_return) {
 		return error_return;
 	}
 
 	if (engine_create_command_pool(&data, 1) != success_return) {
+		return error_return;
+	}
+
+	if(engine_create_depth_resources(&data) != success_return) {
+		return error_return;
+	}
+
+	if (engine_create_framebuffers(&data) != success_return) {
 		return error_return;
 	}
 

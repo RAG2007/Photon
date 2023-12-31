@@ -1,2 +1,2 @@
-glslang -V shader.vert -o vert.spv
-glslang -V shader.frag -o frag.spv
+glslang -V triangle.vert -o tr-vert.spv
+glslang -V triangle.frag -o tr-frag.spv
