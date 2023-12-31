@@ -22,7 +22,7 @@
 unsigned int WIDTH = 1000;
 unsigned int HEIGHT = 1000;
 
-const int MAX_FRAMES_IN_FLIGHT = 2;
+const int MAX_FRAMES_IN_FLIGHT = 2	;
 
 int error_return = 1, success_return = 0;
 
@@ -43,7 +43,7 @@ const struct vertex triangle_vertices[] = {
 	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
 	{{0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
 	{{0.5f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-	{{-1.0f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+	{{-1.0f, -0.5f, 0.00001f}, {0.0f, 0.0f, 1.0f}},
 	{{-0.5f, 0.5f, 0.00001f}, {0.0f, 0.0f, 1.0f}},
 	{{0.5f, -0.5f, 0.00001f}, {0.0f, 0.0f, 1.0f}}
 };
