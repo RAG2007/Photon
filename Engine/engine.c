@@ -40,12 +40,12 @@ struct vertex {
 
 int triangle_vertices_count = 6;
 const struct vertex triangle_vertices[] = {
-	{{-0.5f, -0.5f, 0.2f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, -0.5f, 0.2f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, 0.5f, 0.2f}, {1.0f, 0.0f, 0.0f}},
-	{{-1.0f, -0.5f, 0.1f}, {0.0f, 0.0f, 1.0f}},
-	{{-0.5f, 0.5f, 0.1f}, {0.0f, 0.0f, 1.0f}},
-	{{0.5f, -0.5f, 0.1f}, {0.0f, 0.0f, 1.0f}}
+	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+	{{-1.0f, -0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+	{{-0.5f, 0.5f, 0.00001f}, {0.0f, 0.0f, 1.0f}},
+	{{0.5f, -0.5f, 0.00001f}, {0.0f, 0.0f, 1.0f}}
 };
 
 uint32_t triangle_index_count = 6;
@@ -66,12 +66,12 @@ struct engine_data {
 	VkDeviceQueueCreateInfo queue_create_infos[2];
 	VkDevice device;
 	VkSurfaceFormatKHR surface_format;
-	VkExtent2D extent;
+	VkExtent2D swapchain_extent;
 	
 	VkSwapchainKHR swapchain;
 	uint32_t swapchain_image_count;
 	VkImage *swapchain_images;
-	VkImageView *image_views;
+	VkImageView *swapchain_image_views;
 	VkShaderModule shader_module;
 	VkRenderPass render_pass;
 	VkPipelineLayout pipeline_layout;
@@ -95,7 +95,7 @@ struct engine_data {
 	VkFormat depth_format;
 
 	VkCommandBuffer command_buffers[2];
-	uint32_t image_index;
+	uint32_t current_image_index;
 	VkSemaphore image_available_semaphores[2];
 	VkSemaphore render_finished_semaphores[2];
 	VkFence in_flight_fences[2];
@@ -307,8 +307,8 @@ int engine_setting_swapchain_extent(struct engine_data *data)
 {
 	int width, height;
 	glfwGetFramebufferSize(data->window, &width, &height);
-	data->extent.height = height;
-	data->extent.width = width;
+	data->swapchain_extent.height = height;
+	data->swapchain_extent.width = width;
 	return success_return;
 }
 
@@ -334,7 +334,7 @@ int engine_create_swapchain(struct engine_data *data)
 		.minImageCount = data->swapchain_image_count,
 		.imageFormat = data->surface_format.format,
 		.imageColorSpace = data->surface_format.colorSpace,
-		.imageExtent = data->extent,
+		.imageExtent = data->swapchain_extent,
 		.imageArrayLayers = 1,
 		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -616,15 +616,15 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 	VkViewport viewport = {
 		.x = 0.0f,
 		.y = 0.0f,
-		.width = (float) data->extent.width,
-		.height = (float) data->extent.height,
+		.width = (float) data->swapchain_extent.width,
+		.height = (float) data->swapchain_extent.height,
 		.minDepth = 0.0f,
 		.maxDepth = 1.0f
 	};
 
 	VkRect2D scissor = {
 		.offset = {0, 0},
-		.extent = data->extent
+		.extent = data->swapchain_extent
 	};
 
 	VkPipelineViewportStateCreateInfo viewport_state = {
@@ -758,7 +758,7 @@ int engine_create_framebuffers(struct engine_data *data)
 {
 	for (int i = 0; i < data->swapchain_image_count; i++) {
 		VkImageView attachments[] = {
-			data->image_views[i],
+			data->swapchain_image_views[i],
 			data->depth_image_view
 		};
 
@@ -769,8 +769,8 @@ int engine_create_framebuffers(struct engine_data *data)
 			.renderPass = data->render_pass,
 			.attachmentCount = 2,
 			.pAttachments = attachments,
-			.width = data->extent.width,
-			.height = data->extent.height,
+			.width = data->swapchain_extent.width,
+			.height = data->swapchain_extent.height,
 			.layers = 1
 		};
 		if (UNLIKELY(vkCreateFramebuffer(data->device, &framebuffer_info, 0,
@@ -836,7 +836,7 @@ int engine_create_image(struct engine_data *data, uint32_t width, uint32_t heigh
 	};
 
 	if (vkCreateImage(data->device, &imageInfo, NULL, image) != VK_SUCCESS) {
-		printf("failed to create image!");
+		printf("failed to create image!\n");
 		return error_return;
 	}
 
@@ -850,7 +850,7 @@ int engine_create_image(struct engine_data *data, uint32_t width, uint32_t heigh
 	};
 
 	if (vkAllocateMemory(data->device, &allocInfo, NULL, image_memory) != VK_SUCCESS) {
-		printf("failed to allocate image memory!");
+		printf("failed to allocate image memory!\n");
 		return error_return;
 	}
 
@@ -861,12 +861,12 @@ int engine_create_image(struct engine_data *data, uint32_t width, uint32_t heigh
 int engine_create_depth_resources(struct engine_data *data) {
 	VkFormat format;
 	if(engine_find_supported_depth_format(data, &format) != success_return) {
-		printf("failed to get supported format");
+		printf("failed to get supported format\n");
 		return error_return;
 	}
-	engine_create_image(data, data->extent.width, data->extent.height, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &data->depth_image, &data->depth_image_memory);
+	engine_create_image(data, data->swapchain_extent.width, data->swapchain_extent.height, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &data->depth_image, &data->depth_image_memory);
 	if(engine_create_image_view(data, data->depth_image, format, &data->depth_image_view) != success_return) {
-		printf("failed to create image view");
+		printf("failed to create image view\n");
 		return error_return;
 	}
 	return success_return;
@@ -1061,10 +1061,10 @@ int engine_record_command_buffer(struct engine_data *data)
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		.pNext = NULL,
 		.renderPass = data->render_pass,
-		.framebuffer = data->swapchain_framebuffers[data->image_index],
+		.framebuffer = data->swapchain_framebuffers[data->current_image_index],
 		.renderArea = {
 			.offset = {0, 0},
-			.extent = data->extent
+			.extent = data->swapchain_extent
 		},
 		.clearValueCount = 2,
 		.pClearValues = clear_values
@@ -1078,8 +1078,8 @@ int engine_record_command_buffer(struct engine_data *data)
 	VkViewport viewport = {
 		.x = 0.0f,
 		.y = 0.0f,
-		.width = (float)data->extent.width,
-		.height = (float)data->extent.height,
+		.width = (float)data->swapchain_extent.width,
+		.height = (float)data->swapchain_extent.height,
 		.minDepth = 0.0f,
 		.maxDepth = 1.0f
 	};
@@ -1087,7 +1087,7 @@ int engine_record_command_buffer(struct engine_data *data)
 
 	VkRect2D scissor = {
 		.offset = {0, 0},
-		.extent = data->extent
+		.extent = data->swapchain_extent
 	};
 	vkCmdSetScissor(*command_buffer, 0, 1, &scissor);
 
@@ -1143,7 +1143,7 @@ void engine_cleanup_swapchain(struct engine_data *data)
 		vkDestroyFramebuffer(data->device, data->swapchain_framebuffers[i], NULL);
 	}
 	for (int i = 0; i < data->swapchain_image_count; i++) {
-		vkDestroyImageView(data->device, data->image_views[i], NULL);
+		vkDestroyImageView(data->device, data->swapchain_image_views[i], NULL);
 	}
 	vkDestroySwapchainKHR(data->device, data->swapchain, NULL);
 }
@@ -1169,10 +1169,10 @@ int engine_recreate_swapchain(struct engine_data *data)
 	data->swapchain_images = malloc(sizeof(VkImage) * data->swapchain_image_count);
 	vkGetSwapchainImagesKHR(data->device, data->swapchain, &data->swapchain_image_count, data->swapchain_images);
 
-	data->image_views = malloc(sizeof(VkImageView) * data->swapchain_image_count);
+	data->swapchain_image_views = malloc(sizeof(VkImageView) * data->swapchain_image_count);
 	data->swapchain_framebuffers = malloc(sizeof(VkFramebuffer) * data->swapchain_image_count);
 	for(int i = 0; i < data->swapchain_image_count; i++) {
-		if(engine_create_image_view(data, data->swapchain_images[i], data->surface_format.format, &data->image_views[i]) != success_return) {
+		if(engine_create_image_view(data, data->swapchain_images[i], data->surface_format.format, &data->swapchain_image_views[i]) != success_return) {
 			printf("Failed to recreate Image Views\n");
 			return error_return;
 		}
@@ -1186,7 +1186,7 @@ int engine_draw_frame(struct engine_data *data)
 {	
 	vkWaitForFences(data->device, 1, &data->in_flight_fences[data->current_frame], VK_TRUE, UINT64_MAX);
 
-	VkResult result = vkAcquireNextImageKHR(data->device, data->swapchain, UINT64_MAX, data->image_available_semaphores[data->current_frame], VK_NULL_HANDLE, &data->image_index);
+	VkResult result = vkAcquireNextImageKHR(data->device, data->swapchain, UINT64_MAX, data->image_available_semaphores[data->current_frame], VK_NULL_HANDLE, &data->current_image_index);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 		engine_recreate_swapchain(data);
@@ -1230,7 +1230,7 @@ int engine_draw_frame(struct engine_data *data)
 		.pWaitSemaphores = signal_semaphores,
 		.swapchainCount = 1,
 		.pSwapchains = swapchains,
-		.pImageIndices = &data->image_index,
+		.pImageIndices = &data->current_image_index,
 		.pResults = NULL
 	};
 	result = vkQueuePresentKHR(data->present_queue, &present_info);
@@ -1297,11 +1297,11 @@ int main()
 	data.swapchain_images = malloc(sizeof(VkImage) * data.swapchain_image_count);
 	vkGetSwapchainImagesKHR(data.device, data.swapchain, &data.swapchain_image_count, data.swapchain_images);
 
-	data.image_views = malloc(sizeof(VkImageView) * data.swapchain_image_count);
+	data.swapchain_image_views = malloc(sizeof(VkImageView) * data.swapchain_image_count);
 	data.swapchain_framebuffers = malloc(sizeof(VkFramebuffer) * data.swapchain_image_count);
 
 	for(int i = 0; i < data.swapchain_image_count; i++) {
-		if(engine_create_image_view(&data, data.swapchain_images[i], data.surface_format.format, &data.image_views[i]) != success_return) {
+		if(engine_create_image_view(&data, data.swapchain_images[i], data.surface_format.format, &data.swapchain_image_views[i]) != success_return) {
 			printf("Failed to create Image Views\n");
 			return error_return;
 		}
@@ -1367,7 +1367,7 @@ int main()
 	engine_cleanup_swapchain(&data);
 
 	free(data.swapchain_images);
-	free(data.image_views);
+	free(data.swapchain_image_views);
 	free(data.swapchain_framebuffers);
 
 	vkDestroyBuffer(data.device, data.main_vertex_buffer, NULL);
