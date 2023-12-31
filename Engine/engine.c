@@ -1136,6 +1136,9 @@ int engine_create_sync_objects(struct engine_data *data)
 
 void engine_cleanup_swapchain(struct engine_data *data)
 {
+	vkDestroyImageView(data->device, data->depth_image_view, NULL);
+	vkDestroyImage(data->device, data->depth_image, NULL);
+	vkFreeMemory(data->device, data->depth_image_memory, NULL);
 	for (int i = 0; i < data->swapchain_image_count; i++) {
 		vkDestroyFramebuffer(data->device, data->swapchain_framebuffers[i], NULL);
 	}
@@ -1148,8 +1151,6 @@ void engine_cleanup_swapchain(struct engine_data *data)
 int engine_recreate_swapchain(struct engine_data *data)
 {
 	int width = 0, height = 0;
-        glfwGetFramebufferSize(data->window, &width, &height);
-
         while (width == 0 || height == 0) {
             glfwGetFramebufferSize(data->window, &width, &height);
             glfwWaitEvents();
@@ -1176,6 +1177,7 @@ int engine_recreate_swapchain(struct engine_data *data)
 			return error_return;
 		}
 	}
+	engine_create_depth_resources(data);
 	engine_create_framebuffers(data);
 	return success_return;
 }
