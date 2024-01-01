@@ -1435,12 +1435,12 @@ int main()
 		return error_return;
 	}
 
-	if (engine_create_graphics_pipeline(&data, &data.triangle_graphics_pipeline, &data.triangle_pipeline_layout, "/home/radek/Desktop/Photon/Engine/shaders/tr-vert.spv", "/home/radek/Desktop/Photon/Engine/shaders/tr-frag.spv", 0)
+	if (engine_create_graphics_pipeline(&data, &data.triangle_graphics_pipeline, &data.triangle_pipeline_layout, "shaders/compiled/tr-vert.spv", "shaders/compiled/tr-frag.spv", 0)
 	   != success_return) {
 		return error_return;
 	}
 
-	if (engine_create_graphics_pipeline(&data, &data.circle_graphics_pipeline, &data.circle_pipeline_layout, "/home/radek/Desktop/Photon/Engine/shaders/cr-vert.spv", "/home/radek/Desktop/Photon/Engine/shaders/cr-frag.spv", 1)
+	if (engine_create_graphics_pipeline(&data, &data.circle_graphics_pipeline, &data.circle_pipeline_layout, "shaders/compiled/cr-vert.spv", "shaders/compiled/cr-frag.spv", 1)
 	  != success_return) {
 		return error_return;
 	}
