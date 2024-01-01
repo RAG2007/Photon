@@ -1,3 +1,5 @@
 /Engine/engine
 /Engine/shaders/tr-frag.spv
 /Engine/shaders/tr-vert.spv
+/Engine/shaders/cr-frag.spv
+/Engine/shaders/cr-vert.spv

@@ -22,7 +22,7 @@
 unsigned int WIDTH = 1000;
 unsigned int HEIGHT = 1000;
 
-const int MAX_FRAMES_IN_FLIGHT = 2	;
+const int MAX_FRAMES_IN_FLIGHT = 2;
 
 int error_return = 1, success_return = 0;
 
@@ -38,19 +38,38 @@ struct vertex {
 	float color[3];
 };
 
+struct circle {
+	float position[3];
+	float color[3];
+	//float radius;
+};
+
 int triangle_vertices_count = 6;
 const struct vertex triangle_vertices[] = {
-	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-	{{-1.0f, -0.5f, 0.00001f}, {0.0f, 0.0f, 1.0f}},
-	{{-0.5f, 0.5f, 0.00001f}, {0.0f, 0.0f, 1.0f}},
-	{{0.5f, -0.5f, 0.00001f}, {0.0f, 0.0f, 1.0f}}
+	{{-0.9f, -0.9f, 0.0f}, {1.0f, 1.0f, 1.0f}},
+	{{0.7f, -0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}},
+	{{0.9f, 0.6f, 0.0f}, {1.0f, 1.0f, 1.0f}},
+	{{-0.9f, 0.9f, 0.2f}, {1.0f, 0.0f, 1.0f}},
+	{{0.8f, -0.6f, 0.2f}, {1.0f, 0.0f, 1.0f}},
+	{{0.2f, 0.8f, 0.8f}, {1.0f, 0.0f, 1.0f}}
+	
 };
 
 uint32_t triangle_index_count = 6;
 const uint32_t triangle_indices[] = {
 	0, 1, 2, 3, 4, 5
+};
+
+int circle_vertices_count = 3;
+const struct circle circle_vertices[] = {
+	{{-0.8f, 0.6f, 0.1f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.8f, 0.1f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.2f, 0.1f}, {1.0f, 0.0f, 0.0f}}
+};
+
+uint32_t circle_index_count = 3;
+const uint32_t circle_indices[] = {
+	0, 1, 2
 };
 
 struct engine_data {
@@ -74,20 +93,34 @@ struct engine_data {
 	VkImageView *swapchain_image_views;
 	VkShaderModule shader_module;
 	VkRenderPass render_pass;
-	VkPipelineLayout pipeline_layout;
-	VkPipeline graphics_pipeline;
+
+	VkPipelineLayout triangle_pipeline_layout;
+	VkPipeline triangle_graphics_pipeline;
+
+	VkPipelineLayout circle_pipeline_layout;
+	VkPipeline circle_graphics_pipeline;
+
 	VkFramebuffer *swapchain_framebuffers;
 	VkCommandPool graphics_command_pool;
-
 	VkCommandPool copy_vertex_buffer_command_pool;
-	VkBuffer staging_buffer;
-	VkMemoryRequirements staging_memory_requirements;
-	VkDeviceMemory staging_buffer_memory;
-	VkBuffer main_vertex_buffer;
-	VkBuffer main_index_buffer;
-	VkMemoryRequirements main_vertex_memory_requirements;
-	VkDeviceMemory main_vertex_buffer_memory;
-	VkDeviceMemory main_index_buffer_memory;
+
+	VkBuffer triangle_staging_buffer;
+	VkMemoryRequirements triangle_staging_memory_requirements;
+	VkDeviceMemory triangle_staging_buffer_memory;
+	VkBuffer triangle_main_vertex_buffer;
+	VkBuffer triangle_main_index_buffer;
+	VkDeviceMemory triangle_main_vertex_buffer_memory;
+	VkDeviceMemory triangle_main_index_buffer_memory;
+
+	VkBuffer circle_staging_buffer;
+	VkMemoryRequirements circle_staging_memory_requirements;
+	VkDeviceMemory circle_staging_buffer_memory;
+	VkBuffer circle_main_vertex_buffer;
+	VkBuffer circle_main_index_buffer;
+	VkDeviceMemory circle_main_vertex_buffer_memory;
+	VkDeviceMemory circle_main_index_buffer_memory;
+
+	
 	VkFence vertex_buffer_copy_fence;
 	VkImage depth_image;
 	VkDeviceMemory depth_image_memory;
@@ -116,21 +149,43 @@ VkVertexInputBindingDescription get_vertex_binding_description()
 	return binding_description;
 }
 
-VkVertexInputAttributeDescription *get_vertex_input_attribute_description()
+VkVertexInputAttributeDescription *get_vertex_input_attribute_description(int vertex_type)
 {
+	if(vertex_type == 0) {
+		VkVertexInputAttributeDescription *attribute_descriptions = malloc(2 * sizeof(VkVertexInputAttributeDescription));
+		attribute_descriptions[0] = (VkVertexInputAttributeDescription){
+			.location = 0,
+			.binding = 0,
+			.format = VK_FORMAT_R32G32B32_SFLOAT,
+			.offset = offsetof(struct vertex, position)
+		};
+		attribute_descriptions[1] = (VkVertexInputAttributeDescription){
+			.location = 1,
+			.binding = 0,
+			.format = VK_FORMAT_R32G32B32_SFLOAT,
+			.offset = offsetof(struct vertex, color)
+		};
+		return attribute_descriptions;
+	}
 	VkVertexInputAttributeDescription *attribute_descriptions = malloc(2 * sizeof(VkVertexInputAttributeDescription));
 	attribute_descriptions[0] = (VkVertexInputAttributeDescription){
 		.location = 0,
 		.binding = 0,
 		.format = VK_FORMAT_R32G32B32_SFLOAT,
-		.offset = offsetof(struct vertex, position)
+		.offset = offsetof(struct circle, position)
 	};
 	attribute_descriptions[1] = (VkVertexInputAttributeDescription){
 		.location = 1,
 		.binding = 0,
 		.format = VK_FORMAT_R32G32B32_SFLOAT,
-		.offset = offsetof(struct vertex, color)
+		.offset = offsetof(struct circle, color)
 	};
+	/*attribute_descriptions[2] = (VkVertexInputAttributeDescription){
+		.location = 2,
+		.binding = 0,
+		.format = VK_FORMAT_R32_SFLOAT,
+		.offset = offsetof(struct circle, radius)
+	};*/
 	return attribute_descriptions;
 }
 
@@ -480,7 +535,6 @@ int engine_create_render_pass(struct engine_data *data)
 		.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 	};
         
-
 	VkAttachmentReference color_attachment_ref = {
 		.attachment = 0,
 		.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
@@ -515,8 +569,8 @@ int engine_create_render_pass(struct engine_data *data)
 	};
 
 	VkAttachmentDescription attachments[] = {
-	color_attachment,
-	depth_attachment
+		color_attachment,
+		depth_attachment
 	};
 
 	VkRenderPassCreateInfo render_pass_info = {
@@ -531,19 +585,18 @@ int engine_create_render_pass(struct engine_data *data)
 		.pDependencies = &dependency
 	};
 
-	if (UNLIKELY(vkCreateRenderPass(data->device, &render_pass_info, NULL, &data->render_pass) != VK_SUCCESS)) {
+	if (UNLIKELY(vkCreateRenderPass(data->device, &render_pass_info, NULL, &data->render_pass) != VK_SUCCESS))
 		return error_return;
-	}
 	return success_return;
 }
 
-int engine_create_graphics_pipeline(struct engine_data *data)
+int engine_create_graphics_pipeline(struct engine_data *data, VkPipeline *graphics_pipeline, VkPipelineLayout *pipeline_layout, char *vert_dir, char *frag_dir, int vertex_type)
 {
 	int length_vert;
 	int length_frag;
-	char *vert_shader_code = engine_read_file("shaders/tr-vert.spv", &length_vert);
+	char *vert_shader_code = engine_read_file(vert_dir, &length_vert);
 
-	char *frag_shader_code = engine_read_file("shaders/tr-frag.spv", &length_frag);
+	char *frag_shader_code = engine_read_file(frag_dir, &length_frag);
 
 	VkShaderModule vert_shader_module;
 	engine_create_shader_module(data, vert_shader_code, length_vert,
@@ -593,15 +646,18 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 
 	VkVertexInputBindingDescription binding_description = get_vertex_binding_description();
 
-	VkVertexInputAttributeDescription *attribute_descriptions = get_vertex_input_attribute_description();
-
+	VkVertexInputAttributeDescription *attribute_descriptions = get_vertex_input_attribute_description(vertex_type);
+	int attribute_description_count = 2;
+	/*if(vertex_type == 1) {
+		attribute_description_count = 3;
+	}*/
 	VkPipelineVertexInputStateCreateInfo vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
 		.vertexBindingDescriptionCount = 1,
 		.pVertexBindingDescriptions = &binding_description,
-		.vertexAttributeDescriptionCount = 2,
+		.vertexAttributeDescriptionCount = attribute_description_count,
 		.pVertexAttributeDescriptions = attribute_descriptions
 	};
 
@@ -710,7 +766,7 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 	};
 
 	if (UNLIKELY(vkCreatePipelineLayout(data->device, &pipeline_layout_info, NULL,
-				   &data->pipeline_layout) != VK_SUCCESS)) {
+				   pipeline_layout) != VK_SUCCESS)) {
 		printf("Failed to create pipeline layout!\n");
 		return error_return;
 	};
@@ -730,7 +786,7 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 		.pDepthStencilState = &depth_stencil,
 		.pColorBlendState = &color_blending,
 		.pDynamicState = &dynamic_state,
-		.layout = data->pipeline_layout,
+		.layout = *pipeline_layout,
 		.renderPass = data->render_pass,
 		.subpass = 0,
 		.basePipelineHandle = VK_NULL_HANDLE,
@@ -738,7 +794,7 @@ int engine_create_graphics_pipeline(struct engine_data *data)
 	};
 
 	if (UNLIKELY(vkCreateGraphicsPipelines(data->device, VK_NULL_HANDLE, 1,
-				      &pipeline_info, NULL, &data->graphics_pipeline) 
+				      &pipeline_info, NULL, graphics_pipeline) 
 		     != VK_SUCCESS)) {
 		printf("failed to create graphics pipeline!\n");
 		return error_return;
@@ -969,27 +1025,51 @@ void engine_copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize s
 
 int engine_create_vertex_buffers(struct engine_data *data)
 {
-	VkDeviceSize buffer_size = sizeof(struct vertex) * triangle_vertices_count;
+	VkDeviceSize triangle_buffer_size = sizeof(struct vertex) * triangle_vertices_count;
 	
-	engine_create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	engine_create_buffer(data, triangle_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-		      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &data->staging_buffer,
-		      &data->staging_buffer_memory);
+		      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &data->triangle_staging_buffer,
+		      &data->triangle_staging_buffer_memory);
 
-	void* vertex_buffer_data;
-	vkMapMemory(data->device, data->staging_buffer_memory, 0, buffer_size, 0, &vertex_buffer_data);
-	memcpy(vertex_buffer_data, triangle_vertices, buffer_size);
-	vkUnmapMemory(data->device, data->staging_buffer_memory);
+	void* triangle_vertex_buffer_data;
+	vkMapMemory(data->device, data->triangle_staging_buffer_memory, 0, triangle_buffer_size, 0, &triangle_vertex_buffer_data);
+	memcpy(triangle_vertex_buffer_data, triangle_vertices, triangle_buffer_size);
+	vkUnmapMemory(data->device, data->triangle_staging_buffer_memory);
 
-	engine_create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+	engine_create_buffer(data, triangle_buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
 		     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &data->main_vertex_buffer,
-		     &data->main_vertex_buffer_memory);
+		     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &data->triangle_main_vertex_buffer,
+		     &data->triangle_main_vertex_buffer_memory);
 
-	engine_copy_buffer(data->staging_buffer, data->main_vertex_buffer, buffer_size, data);
+	engine_copy_buffer(data->triangle_staging_buffer, data->triangle_main_vertex_buffer, triangle_buffer_size, data);
 
-	vkDestroyBuffer(data->device, data->staging_buffer, NULL);
-	vkFreeMemory(data->device, data->staging_buffer_memory, NULL);
+
+	vkDestroyBuffer(data->device, data->triangle_staging_buffer, NULL);
+	vkFreeMemory(data->device, data->triangle_staging_buffer_memory, NULL);
+
+	VkDeviceSize circle_buffer_size = sizeof(struct circle) * circle_vertices_count;
+	
+	engine_create_buffer(data, circle_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+		      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &data->circle_staging_buffer,
+		      &data->circle_staging_buffer_memory);
+
+	void* circle_vertex_buffer_data;
+	vkMapMemory(data->device, data->circle_staging_buffer_memory, 0, circle_buffer_size, 0, &circle_vertex_buffer_data);
+	memcpy(circle_vertex_buffer_data, circle_vertices, circle_buffer_size);
+	vkUnmapMemory(data->device, data->circle_staging_buffer_memory);
+
+	engine_create_buffer(data, circle_buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+		     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &data->circle_main_vertex_buffer,
+		     &data->circle_main_vertex_buffer_memory);
+
+	engine_copy_buffer(data->circle_staging_buffer, data->circle_main_vertex_buffer, circle_buffer_size, data);
+
+	vkDestroyBuffer(data->device, data->circle_staging_buffer, NULL);
+	vkFreeMemory(data->device, data->circle_staging_buffer_memory, NULL);
+	
 	return success_return;
 }
 
@@ -1000,24 +1080,47 @@ int engine_create_index_buffers(struct engine_data *data)
 	engine_create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 			     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
 			     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			     &data->staging_buffer,
-		    	     &data->staging_buffer_memory);
+			     &data->triangle_staging_buffer,
+		    	     &data->triangle_staging_buffer_memory);
 
 	void* index_buffer_data;
-	vkMapMemory(data->device, data->staging_buffer_memory, 0, buffer_size, 0, &index_buffer_data);
+	vkMapMemory(data->device, data->triangle_staging_buffer_memory, 0, buffer_size, 0, &index_buffer_data);
 	memcpy(index_buffer_data, triangle_indices, buffer_size);
-	vkUnmapMemory(data->device, data->staging_buffer_memory);
+	vkUnmapMemory(data->device, data->triangle_staging_buffer_memory);
 
 	engine_create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
 			     VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 			     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			     &data->main_index_buffer,
-		   	     &data->main_index_buffer_memory);
+			     &data->triangle_main_index_buffer,
+		   	     &data->triangle_main_index_buffer_memory);
 
-	engine_copy_buffer(data->staging_buffer, data->main_index_buffer, buffer_size, data);
+	engine_copy_buffer(data->triangle_staging_buffer, data->triangle_main_index_buffer, buffer_size, data);
 
-	vkDestroyBuffer(data->device, data->staging_buffer, NULL);
-	vkFreeMemory(data->device, data->staging_buffer_memory, NULL);
+	vkDestroyBuffer(data->device, data->triangle_staging_buffer, NULL);
+	vkFreeMemory(data->device, data->triangle_staging_buffer_memory, NULL);
+
+	buffer_size = sizeof(uint32_t) * circle_index_count;
+	
+	engine_create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+			     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			     &data->circle_staging_buffer,
+		    	     &data->circle_staging_buffer_memory);
+
+	vkMapMemory(data->device, data->circle_staging_buffer_memory, 0, buffer_size, 0, &index_buffer_data);
+	memcpy(index_buffer_data, circle_indices, buffer_size);
+	vkUnmapMemory(data->device, data->circle_staging_buffer_memory);
+
+	engine_create_buffer(data, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+			     VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			     &data->circle_main_index_buffer,
+		   	     &data->circle_main_index_buffer_memory);
+
+	engine_copy_buffer(data->circle_staging_buffer, data->circle_main_index_buffer, buffer_size, data);
+
+	vkDestroyBuffer(data->device, data->circle_staging_buffer, NULL);
+	vkFreeMemory(data->device, data->circle_staging_buffer_memory, NULL);
 	return success_return;
 }
 
@@ -1073,7 +1176,7 @@ int engine_record_command_buffer(struct engine_data *data)
 	vkCmdBeginRenderPass(*command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 
 	vkCmdBindPipeline(*command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-	data->graphics_pipeline);
+	data->triangle_graphics_pipeline);
 
 	VkViewport viewport = {
 		.x = 0.0f,
@@ -1091,15 +1194,34 @@ int engine_record_command_buffer(struct engine_data *data)
 	};
 	vkCmdSetScissor(*command_buffer, 0, 1, &scissor);
 
-	VkBuffer vertex_buffers[] = {data->main_vertex_buffer};
+	VkBuffer triangle_vertex_buffers[] = {data->triangle_main_vertex_buffer};
 	VkDeviceSize offsets[] = {0};
 
-	vkCmdBindVertexBuffers(*command_buffer, 0, 1, vertex_buffers, offsets);
+	vkCmdBindVertexBuffers(*command_buffer, 0, 1, triangle_vertex_buffers, offsets);
 
-	vkCmdBindIndexBuffer(*command_buffer, data->main_index_buffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdBindIndexBuffer(*command_buffer, data->triangle_main_index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
 	vkCmdDrawIndexed(*command_buffer, triangle_index_count, 1, 0, 0, 0);
 
+	//tutaj
+
+	vkCmdBindPipeline(*command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+	data->circle_graphics_pipeline);
+
+	vkCmdSetViewport(*command_buffer, 0, 1, &viewport);
+
+	vkCmdSetScissor(*command_buffer, 0, 1, &scissor);
+
+	VkBuffer circle_vertex_buffers[] = {data->circle_main_vertex_buffer};
+
+	vkCmdBindVertexBuffers(*command_buffer, 0, 1, circle_vertex_buffers, offsets);
+
+	vkCmdBindIndexBuffer(*command_buffer, data->circle_main_index_buffer, 0, VK_INDEX_TYPE_UINT32);
+
+	vkCmdDrawIndexed(*command_buffer, circle_index_count, 1, 0, 0, 0);
+
+	//tutaj
+      
 	vkCmdEndRenderPass(*command_buffer);
 
 	if (UNLIKELY(vkEndCommandBuffer(*command_buffer) != VK_SUCCESS)) {
@@ -1313,8 +1435,13 @@ int main()
 		return error_return;
 	}
 
-	if (engine_create_graphics_pipeline(&data)
+	if (engine_create_graphics_pipeline(&data, &data.triangle_graphics_pipeline, &data.triangle_pipeline_layout, "/home/radek/Desktop/Photon/Engine/shaders/tr-vert.spv", "/home/radek/Desktop/Photon/Engine/shaders/tr-frag.spv", 0)
 	   != success_return) {
+		return error_return;
+	}
+
+	if (engine_create_graphics_pipeline(&data, &data.circle_graphics_pipeline, &data.circle_pipeline_layout, "/home/radek/Desktop/Photon/Engine/shaders/cr-vert.spv", "/home/radek/Desktop/Photon/Engine/shaders/cr-frag.spv", 1)
+	  != success_return) {
 		return error_return;
 	}
 
@@ -1370,16 +1497,24 @@ int main()
 	free(data.swapchain_image_views);
 	free(data.swapchain_framebuffers);
 
-	vkDestroyBuffer(data.device, data.main_vertex_buffer, NULL);
-	vkFreeMemory(data.device, data.main_vertex_buffer_memory, NULL);
-	vkDestroyBuffer(data.device, data.main_index_buffer, NULL);
-	vkFreeMemory(data.device, data.main_index_buffer_memory, NULL);
+	vkDestroyBuffer(data.device, data.triangle_main_vertex_buffer, NULL);
+	vkFreeMemory(data.device, data.triangle_main_vertex_buffer_memory, NULL);
+	vkDestroyBuffer(data.device, data.triangle_main_index_buffer, NULL);
+	vkFreeMemory(data.device, data.triangle_main_index_buffer_memory, NULL);
+
+	vkDestroyBuffer(data.device, data.circle_main_vertex_buffer, NULL);
+	vkFreeMemory(data.device, data.circle_main_vertex_buffer_memory, NULL);
+	vkDestroyBuffer(data.device, data.circle_main_index_buffer, NULL);
+	vkFreeMemory(data.device, data.circle_main_index_buffer_memory, NULL);
 
 	vkDestroyFence(data.device, data.vertex_buffer_copy_fence, NULL);
 	vkDestroyCommandPool(data.device, data.copy_vertex_buffer_command_pool, NULL);
 
-	vkDestroyPipeline(data.device, data.graphics_pipeline, NULL);
-	vkDestroyPipelineLayout(data.device, data.pipeline_layout, NULL);
+	vkDestroyPipeline(data.device, data.triangle_graphics_pipeline, NULL);
+	vkDestroyPipelineLayout(data.device, data.triangle_pipeline_layout, NULL);
+
+	vkDestroyPipeline(data.device, data.circle_graphics_pipeline, NULL);
+	vkDestroyPipelineLayout(data.device, data.circle_pipeline_layout, NULL);
 
 	vkDestroyRenderPass(data.device, data.render_pass, NULL);
 
