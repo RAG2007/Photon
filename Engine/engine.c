@@ -28,6 +28,11 @@ int error_return = 1, success_return = 0;
 
 int window_pointer;
 
+struct uniform_buffer_widow_size {
+	unsigned int width;
+	unsigned int height;
+};
+
 struct queue_family_indices {
 	int graphics_family;
 	int present_family;
@@ -97,12 +102,15 @@ struct engine_data {
 	VkPipelineLayout triangle_pipeline_layout;
 	VkPipeline triangle_graphics_pipeline;
 
+	VkDescriptorSetLayout descriptor_set_layout;
+
 	VkPipelineLayout circle_pipeline_layout;
 	VkPipeline circle_graphics_pipeline;
 
 	VkFramebuffer *swapchain_framebuffers;
 	VkCommandPool graphics_command_pool;
 	VkCommandPool copy_vertex_buffer_command_pool;
+
 
 	VkBuffer triangle_staging_buffer;
 	VkMemoryRequirements triangle_staging_memory_requirements;
@@ -119,7 +127,6 @@ struct engine_data {
 	VkBuffer circle_main_index_buffer;
 	VkDeviceMemory circle_main_vertex_buffer_memory;
 	VkDeviceMemory circle_main_index_buffer_memory;
-
 	
 	VkFence vertex_buffer_copy_fence;
 	VkImage depth_image;
@@ -138,6 +145,31 @@ struct engine_data {
 int framebuffer_resized = 0;
 
 void *user_window_pointer;
+
+int descriptor_set_layout(struct engine_data *data) {
+	VkDescriptorSetLayoutBinding uniform_buffer_layout_binding = {	
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.pImmutableSamplers = NULL,
+	};
+
+	VkDescriptorSetLayoutCreateInfo layout_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0,
+		.bindingCount = 1,
+		.pBindings = &uniform_buffer_layout_binding
+	};
+
+	if (vkCreateDescriptorSetLayout(data->device, &layout_info, NULL, &data->descriptor_set_layout) != VK_SUCCESS) {
+		printf("failed to create descriptor set layout!\n");
+		return error_return;
+	}
+	return success_return;
+}
+
 
 VkVertexInputBindingDescription get_vertex_binding_description()
 {
@@ -759,8 +791,8 @@ int engine_create_graphics_pipeline(struct engine_data *data, VkPipeline *graphi
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
-		.setLayoutCount = 0,
-		.pSetLayouts = NULL,
+		.setLayoutCount = 1,
+		.pSetLayouts = &	data->descriptor_set_layout,
 		.pushConstantRangeCount = 0,
 		.pPushConstantRanges = NULL
 	};
@@ -1367,6 +1399,53 @@ int engine_draw_frame(struct engine_data *data)
 	return success_return;
 }
 
+void engine_cleanup(struct engine_data *data) {
+	engine_cleanup_swapchain(data);
+
+	vkDestroyDescriptorSetLayout(data->device, data->descriptor_set_layout, NULL);		
+
+	free(data->swapchain_images);
+	free(data->swapchain_image_views);
+	free(data->swapchain_framebuffers);
+
+	vkDestroyBuffer(data->device, data->triangle_main_vertex_buffer, NULL);
+	vkFreeMemory(data->device, data->triangle_main_vertex_buffer_memory, NULL);
+	vkDestroyBuffer(data->device, data->triangle_main_index_buffer, NULL);
+	vkFreeMemory(data->device, data->triangle_main_index_buffer_memory, NULL);
+
+	vkDestroyBuffer(data->device, data->circle_main_vertex_buffer, NULL);
+	vkFreeMemory(data->device, data->circle_main_vertex_buffer_memory, NULL);
+	vkDestroyBuffer(data->device, data->circle_main_index_buffer, NULL);
+	vkFreeMemory(data->device, data->circle_main_index_buffer_memory, NULL);
+
+	vkDestroyFence(data->device, data->vertex_buffer_copy_fence, NULL);
+	vkDestroyCommandPool(data->device, data->copy_vertex_buffer_command_pool, NULL);
+
+	vkDestroyPipeline(data->device, data->triangle_graphics_pipeline, NULL);
+	vkDestroyPipelineLayout(data->device, data->triangle_pipeline_layout, NULL);
+
+	vkDestroyPipeline(data->device, data->circle_graphics_pipeline, NULL);
+	vkDestroyPipelineLayout(data->device, data->circle_pipeline_layout, NULL);
+
+	vkDestroyRenderPass(data->device, data->render_pass, NULL);
+
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		vkDestroySemaphore(data->device, data->image_available_semaphores[i], NULL);
+		vkDestroySemaphore(data->device, data->render_finished_semaphores[i], NULL);
+		vkDestroyFence(data->device, data->in_flight_fences[i], NULL);
+	}
+
+	vkDestroyCommandPool(data->device, data->graphics_command_pool, NULL);
+
+	vkDestroyDevice(data->device, NULL);
+
+	vkDestroySurfaceKHR(data->instance, data->surface, NULL);
+
+	vkDestroyInstance(data->instance, NULL);
+
+	glfwDestroyWindow(data->window);
+	glfwTerminate();
+}
 
 int main()
 {
@@ -1491,47 +1570,6 @@ int main()
 	}
 	vkDeviceWaitIdle(data.device);
 
-	engine_cleanup_swapchain(&data);
-
-	free(data.swapchain_images);
-	free(data.swapchain_image_views);
-	free(data.swapchain_framebuffers);
-
-	vkDestroyBuffer(data.device, data.triangle_main_vertex_buffer, NULL);
-	vkFreeMemory(data.device, data.triangle_main_vertex_buffer_memory, NULL);
-	vkDestroyBuffer(data.device, data.triangle_main_index_buffer, NULL);
-	vkFreeMemory(data.device, data.triangle_main_index_buffer_memory, NULL);
-
-	vkDestroyBuffer(data.device, data.circle_main_vertex_buffer, NULL);
-	vkFreeMemory(data.device, data.circle_main_vertex_buffer_memory, NULL);
-	vkDestroyBuffer(data.device, data.circle_main_index_buffer, NULL);
-	vkFreeMemory(data.device, data.circle_main_index_buffer_memory, NULL);
-
-	vkDestroyFence(data.device, data.vertex_buffer_copy_fence, NULL);
-	vkDestroyCommandPool(data.device, data.copy_vertex_buffer_command_pool, NULL);
-
-	vkDestroyPipeline(data.device, data.triangle_graphics_pipeline, NULL);
-	vkDestroyPipelineLayout(data.device, data.triangle_pipeline_layout, NULL);
-
-	vkDestroyPipeline(data.device, data.circle_graphics_pipeline, NULL);
-	vkDestroyPipelineLayout(data.device, data.circle_pipeline_layout, NULL);
-
-	vkDestroyRenderPass(data.device, data.render_pass, NULL);
-
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroySemaphore(data.device, data.image_available_semaphores[i], NULL);
-		vkDestroySemaphore(data.device, data.render_finished_semaphores[i], NULL);
-		vkDestroyFence(data.device, data.in_flight_fences[i], NULL);
-	}
-
-	vkDestroyCommandPool(data.device, data.graphics_command_pool, NULL);
-
-	vkDestroyDevice(data.device, NULL);
-
-	vkDestroySurfaceKHR(data.instance, data.surface, NULL);
-
-	vkDestroyInstance(data.instance, NULL);
-
-	glfwDestroyWindow(data.window);
-	glfwTerminate();
+	engine_cleanup(&data);
+	
 }
