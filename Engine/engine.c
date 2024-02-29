@@ -22,7 +22,7 @@
 unsigned int WIDTH = 1000;
 unsigned int HEIGHT = 1000;
 
-const int MAX_FRAMES_IN_FLIGHT = 2;
+#define MAX_FRAMES_IN_FLIGHT 2
 
 int error_return = 1, success_return = 0;
 
@@ -127,6 +127,11 @@ struct engine_data {
 	VkBuffer circle_main_index_buffer;
 	VkDeviceMemory circle_main_vertex_buffer_memory;
 	VkDeviceMemory circle_main_index_buffer_memory;
+
+	struct uniform_buffer_widow_size uniform_buffer;
+	VkBuffer uniform_buffers[MAX_FRAMES_IN_FLIGHT];
+	VkDeviceMemory uniform_buffers_memory[MAX_FRAMES_IN_FLIGHT];
+	void* uniform_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
 	
 	VkFence vertex_buffer_copy_fence;
 	VkImage depth_image;
@@ -146,7 +151,7 @@ int framebuffer_resized = 0;
 
 void *user_window_pointer;
 
-int descriptor_set_layout(struct engine_data *data) {
+int engine_descriptor_set_layout(struct engine_data *data) {
 	VkDescriptorSetLayoutBinding uniform_buffer_layout_binding = {	
 		.binding = 0,
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -791,11 +796,16 @@ int engine_create_graphics_pipeline(struct engine_data *data, VkPipeline *graphi
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
-		.setLayoutCount = 1,
-		.pSetLayouts = &	data->descriptor_set_layout,
 		.pushConstantRangeCount = 0,
 		.pPushConstantRanges = NULL
 	};
+	if(vertex_type == 1) {
+		pipeline_layout_info.setLayoutCount = 1;
+		pipeline_layout_info.pSetLayouts = &data->descriptor_set_layout;
+	} else {
+		pipeline_layout_info.setLayoutCount = 0;
+		pipeline_layout_info.pSetLayouts = NULL;
+	}
 
 	if (UNLIKELY(vkCreatePipelineLayout(data->device, &pipeline_layout_info, NULL,
 				   pipeline_layout) != VK_SUCCESS)) {
@@ -1156,6 +1166,23 @@ int engine_create_index_buffers(struct engine_data *data)
 	return success_return;
 }
 
+int engine_create_uniform_buffers(struct engine_data *data) {
+	VkDeviceSize buffer_size = sizeof(struct uniform_buffer_widow_size);
+
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		if (engine_create_buffer(data, buffer_size,  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		&data->uniform_buffers[i], &data->uniform_buffers_memory[i]) != success_return) {
+			return error_return;
+		}
+
+		if (vkMapMemory(data->device, data->uniform_buffers_memory[i], 0, buffer_size,0, &data->uniform_buffers_mapped[i]) != VK_SUCCESS) {
+			return error_return;
+		}
+	}
+	return success_return;
+}
+
 int engine_create_command_buffers(struct engine_data *data)	
 {
 	VkCommandBufferAllocateInfo alloc_info = {
@@ -1344,6 +1371,8 @@ int engine_draw_frame(struct engine_data *data)
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 		engine_recreate_swapchain(data);
+		data->uniform_buffer.height = data->swapchain_extent.height;
+		data->uniform_buffer.width = data->swapchain_extent.width;
 		return success_return;
 	} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
 		printf("failed to acquire swap chain image!\n");
@@ -1418,6 +1447,13 @@ void engine_cleanup(struct engine_data *data) {
 	vkDestroyBuffer(data->device, data->circle_main_index_buffer, NULL);
 	vkFreeMemory(data->device, data->circle_main_index_buffer_memory, NULL);
 
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		vkDestroyBuffer(data->device, data->uniform_buffers[i], NULL);
+		vkFreeMemory(data->device, data->uniform_buffers_memory[i], NULL);
+	}
+
+	vkDestroyDescriptorSetLayout(data->device, data->descriptor_set_layout, NULL);
+
 	vkDestroyFence(data->device, data->vertex_buffer_copy_fence, NULL);
 	vkDestroyCommandPool(data->device, data->copy_vertex_buffer_command_pool, NULL);
 
@@ -1453,12 +1489,11 @@ int main()
 	memset(&data, 0, sizeof(struct engine_data));
 	engine_init_window(&data);
 
-	if (engine_create_vulkan_instance(&data) != success_return) {
+	if (engine_create_vulkan_instance(&data) != success_return)
 		return error_return;
-	}
 
 	if (UNLIKELY(glfwCreateWindowSurface(data.instance, data.window, NULL, &data.surface) != VK_SUCCESS)) {
-		printf("Failed to create window surface!\n");
+		printf("Failed to create window surface! Aborting!\n");
 		return error_return;
 	}
 
@@ -1471,15 +1506,14 @@ int main()
 	vkGetPhysicalDeviceProperties(data.physical_device, &data.physical_device_properties);
 
 	if (engine_find_queue_families(&data) != success_return) {
-		printf("Failed to find appropriate queue families!\n");
+		printf("Failed to find appropriate queue families! Aborting!\n");
 		return error_return;
 	}
 
 	data.queue_families_count = data.queue_create_infos[0].queueFamilyIndex == data.queue_create_infos[1].queueFamilyIndex ? 1 : 2;
 
-	if (engine_create_device(&data) != success_return) {
+	if (engine_create_device(&data) != success_return)
 		return error_return;
-	}
 
 	vkGetDeviceQueue(data.device, data.queue_create_infos[0].queueFamilyIndex, 0, &data.graphics_queue);
 
@@ -1503,42 +1537,39 @@ int main()
 
 	for(int i = 0; i < data.swapchain_image_count; i++) {
 		if(engine_create_image_view(&data, data.swapchain_images[i], data.surface_format.format, &data.swapchain_image_views[i]) != success_return) {
-			printf("Failed to create Image Views\n");
+			printf("Failed to create Image Views! Aborting!\n");
 			return error_return;
 		}
 	}
 
-	if (engine_create_render_pass(&data) !=
-	   success_return) {
-		printf("failed to create render pass!\n");
+	if (engine_create_render_pass(&data) != success_return) {
+		printf("failed to create render pass! Aborting!\n");
 		return error_return;
 	}
 
-	if (engine_create_graphics_pipeline(&data, &data.triangle_graphics_pipeline, &data.triangle_pipeline_layout, "shaders/compiled/tr-vert.spv", "shaders/compiled/tr-frag.spv", 0)
-	   != success_return) {
+	if (engine_create_graphics_pipeline(&data, &data.triangle_graphics_pipeline,
+	&data.triangle_pipeline_layout, "shaders/compiled/tr-vert.spv", "shaders/compiled/tr-frag.spv", 0)
+	   != success_return)
 		return error_return;
-	}
+
+	if (engine_descriptor_set_layout(&data) != success_return)
+		return error_return;
 
 	if (engine_create_graphics_pipeline(&data, &data.circle_graphics_pipeline, &data.circle_pipeline_layout, "shaders/compiled/cr-vert.spv", "shaders/compiled/cr-frag.spv", 1)
-	  != success_return) {
+	  != success_return)
 		return error_return;
-	}
 
-	if (engine_create_command_pool(&data, 0) != success_return) {
+	if (engine_create_command_pool(&data, 0) != success_return)
 		return error_return;
-	}
 
-	if (engine_create_command_pool(&data, 1) != success_return) {
+	if (engine_create_command_pool(&data, 1) != success_return)
 		return error_return;
-	}
 
-	if(engine_create_depth_resources(&data) != success_return) {
+	if(engine_create_depth_resources(&data) != success_return)
 		return error_return;
-	}
 
-	if (engine_create_framebuffers(&data) != success_return) {
+	if (engine_create_framebuffers(&data) != success_return)
 		return error_return;
-	}
 
 	VkFenceCreateInfo fence_info = {
 		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
@@ -1548,17 +1579,16 @@ int main()
 
 	vkCreateFence(data.device, &fence_info, NULL, &data.vertex_buffer_copy_fence);
 
-	if(engine_create_vertex_buffers(&data) != success_return) {
+	if(engine_create_vertex_buffers(&data) != success_return)
 		return error_return;
-	}
 
-	if(engine_create_index_buffers(&data) != success_return) {
+	if(engine_create_index_buffers(&data) != success_return)
 		return error_return;
-	}
+	if (engine_create_uniform_buffers(&data) != success_return)
+		return error_return;
 
-	if (engine_create_command_buffers(&data)) {
+	if (engine_create_command_buffers(&data))
 		return error_return;
-	}
 
 	engine_create_sync_objects(&data);
 	while (!glfwWindowShouldClose(data.window)) {
@@ -1571,5 +1601,4 @@ int main()
 	vkDeviceWaitIdle(data.device);
 
 	engine_cleanup(&data);
-	
 }
