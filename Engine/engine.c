@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -57,7 +58,6 @@ const struct vertex triangle_vertices[] = {
 	{{-0.9f, 0.9f, 0.2f}, {1.0f, 0.0f, 1.0f}},
 	{{0.8f, -0.6f, 0.2f}, {1.0f, 0.0f, 1.0f}},
 	{{0.2f, 0.8f, 0.8f}, {1.0f, 0.0f, 1.0f}}
-	
 };
 
 uint32_t triangle_index_count = 6;
@@ -133,6 +133,8 @@ struct engine_data {
 	VkDeviceMemory uniform_buffers_memory[MAX_FRAMES_IN_FLIGHT];
 	void* uniform_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
 	
+	VkDescriptorPool descriptor_pool;
+	VkDescriptorSet descriptor_sets[MAX_FRAMES_IN_FLIGHT];
 	VkFence vertex_buffer_copy_fence;
 	VkImage depth_image;
 	VkDeviceMemory depth_image_memory;
@@ -169,7 +171,7 @@ int engine_descriptor_set_layout(struct engine_data *data) {
 	};
 
 	if (vkCreateDescriptorSetLayout(data->device, &layout_info, NULL, &data->descriptor_set_layout) != VK_SUCCESS) {
-		printf("failed to create descriptor set layout!\n");
+		printf("Failed to create descriptor set layout! Aborting\n");
 		return error_return;
 	}
 	return success_return;
@@ -267,7 +269,7 @@ int engine_create_vulkan_instance(struct engine_data *data)
 	};
 
 	if (UNLIKELY(vkCreateInstance(&create_info, NULL, &data->instance) != VK_SUCCESS)) {
-		printf("Failed to create instance!\n");
+		printf("Failed to create instance! Aborting\n");
 		return error_return;
 	}
 	return success_return;
@@ -369,7 +371,7 @@ int engine_create_device(struct engine_data *data)
 		.pEnabledFeatures = &data->physical_device_features
 	};
 	if (UNLIKELY(vkCreateDevice(data->physical_device, &create_info, NULL, &data->device) != VK_SUCCESS)) {
-		printf("failed to create device!\n");
+		printf("failed to create device! Aborting\n");
 		return error_return;
 	}
 	return success_return;
@@ -409,7 +411,7 @@ int engine_create_swapchain(struct engine_data *data)
 	VkSurfaceCapabilitiesKHR capabilities;
 	if (UNLIKELY(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(data->physical_device, data->surface,
 						  &capabilities) != VK_SUCCESS)) {
-		printf("Failed to get physical device surface capabilities!\n");
+		printf("Failed to get physical device surface capabilities! Aborting\n");
 		return error_return;
 	}
 
@@ -451,7 +453,7 @@ int engine_create_swapchain(struct engine_data *data)
 	}
 
 	if (UNLIKELY(vkCreateSwapchainKHR(data->device, &create_info, NULL, &data->swapchain) != VK_SUCCESS)) {
-		printf("failed to create swapchain!\n");
+		printf("Failed to create swapchain! Aborting\n");
 		return error_return;
 	}
 	return success_return;
@@ -529,7 +531,7 @@ int engine_create_shader_module(struct engine_data *data, const char *code, int 
 	};
 
 	if (UNLIKELY(vkCreateShaderModule(data->device, &create_info, NULL, shader_module) != VK_SUCCESS)) {
-		printf("Failed to create Shader Module\n");
+		printf("Failed to create Shader Module! Aborting\n");
 		return error_return;
 	}
 	return success_return;
@@ -838,7 +840,7 @@ int engine_create_graphics_pipeline(struct engine_data *data, VkPipeline *graphi
 	if (UNLIKELY(vkCreateGraphicsPipelines(data->device, VK_NULL_HANDLE, 1,
 				      &pipeline_info, NULL, graphics_pipeline) 
 		     != VK_SUCCESS)) {
-		printf("failed to create graphics pipeline!\n");
+		printf("failed to create graphics pipeline! Aborting\n");
 		return error_return;
 	}
 
@@ -873,7 +875,7 @@ int engine_create_framebuffers(struct engine_data *data)
 		};
 		if (UNLIKELY(vkCreateFramebuffer(data->device, &framebuffer_info, 0,
 		  		       &data->swapchain_framebuffers[i]) != VK_SUCCESS)) {
-			printf("Failed to create framebuffer!\n");
+			printf("Failed to create framebuffer! Aborting\n");
 			return error_return;
 		}
 	}
@@ -897,7 +899,7 @@ int engine_create_command_pool(struct engine_data *data, int is_vertex_buffer_po
 	
 	if (UNLIKELY(vkCreateCommandPool(data->device, &command_pool_info, NULL, command_pool)
 	    != VK_SUCCESS)) {
-		printf("Failed to create command pool\n");
+		printf("Failed to create command pool! Aborting\n");
 		return error_return;
 	}
 	return success_return;
@@ -912,7 +914,7 @@ int engine_find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properti
 		if (type_filter & (1 << i) && (memory_properties.memoryTypes[i].propertyFlags & properties) == properties)
 			return i;
 	}
-	printf("failed to find suitable memory type!\n");
+	printf("failed to find suitable memory type! Aborting\n");
 	return error_return;
 }
 
@@ -934,7 +936,7 @@ int engine_create_image(struct engine_data *data, uint32_t width, uint32_t heigh
 	};
 
 	if (vkCreateImage(data->device, &imageInfo, NULL, image) != VK_SUCCESS) {
-		printf("failed to create image!\n");
+		printf("failed to create image! Aborting\n");
 		return error_return;
 	}
 
@@ -948,7 +950,7 @@ int engine_create_image(struct engine_data *data, uint32_t width, uint32_t heigh
 	};
 
 	if (vkAllocateMemory(data->device, &allocInfo, NULL, image_memory) != VK_SUCCESS) {
-		printf("failed to allocate image memory!\n");
+		printf("failed to allocate image memory! Aborting\n");
 		return error_return;
 	}
 
@@ -959,12 +961,12 @@ int engine_create_image(struct engine_data *data, uint32_t width, uint32_t heigh
 int engine_create_depth_resources(struct engine_data *data) {
 	VkFormat format;
 	if(engine_find_supported_depth_format(data, &format) != success_return) {
-		printf("failed to get supported format\n");
+		printf("failed to get supported format! Aborting\n");
 		return error_return;
 	}
 	engine_create_image(data, data->swapchain_extent.width, data->swapchain_extent.height, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &data->depth_image, &data->depth_image_memory);
 	if(engine_create_image_view(data, data->depth_image, format, &data->depth_image_view) != success_return) {
-		printf("failed to create image view\n");
+		printf("failed to create image view! Aborting\n");
 		return error_return;
 	}
 	return success_return;
@@ -990,7 +992,7 @@ int engine_create_buffer(struct engine_data *data, VkDeviceSize size,
 
 	if (vkCreateBuffer(data->device, &buffer_create_info, NULL, buffer)
 	    != VK_SUCCESS) {
-		printf("failed to create buffer!\n");
+		printf("failed to create buffer! Aborting\n");
 		return error_return;
 	}
 
@@ -1005,7 +1007,7 @@ int engine_create_buffer(struct engine_data *data, VkDeviceSize size,
 	};
 
 	if(UNLIKELY(vkAllocateMemory(data->device, &allocation_info, NULL, buffer_memory) != VK_SUCCESS)) {
-		printf("Failed to allocate buffer memory!\n");
+		printf("Failed to allocate buffer memory! Aborting\n");
 		return error_return;
 	}
 	vkBindBufferMemory(data->device, *buffer, *buffer_memory, 0);
@@ -1183,6 +1185,28 @@ int engine_create_uniform_buffers(struct engine_data *data) {
 	return success_return;
 }
 
+int engine_create_descriptor_pool(struct engine_data *data) {
+	VkDescriptorPoolSize  pool_size = {
+		.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.descriptorCount = (uint32_t)MAX_FRAMES_IN_FLIGHT
+	};
+	
+	VkDescriptorPoolCreateInfo pool_create_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.pNext = NULL,
+		.flags = 0,
+		.maxSets = (uint32_t)MAX_FRAMES_IN_FLIGHT,
+		.poolSizeCount = 1,
+		.pPoolSizes = &pool_size
+	};
+
+	if (vkCreateDescriptorPool(data->device, &pool_create_info, NULL, &data->descriptor_pool) != VK_SUCCESS) {
+		printf("Failed to create descriptor pool! Aborting\n");
+		return error_return;
+	}
+	return success_return;
+}
+
 int engine_create_command_buffers(struct engine_data *data)	
 {
 	VkCommandBufferAllocateInfo alloc_info = {
@@ -1195,8 +1219,50 @@ int engine_create_command_buffers(struct engine_data *data)
 
 	if (vkAllocateCommandBuffers(data->device, &alloc_info, data->command_buffers) !=
 	    VK_SUCCESS) {
-		printf("Failed to create command buffers\n");
+		printf("Failed to create command buffers! Aborting\n");
 		return error_return;
+	}
+	return success_return;
+}
+
+int engine_create_descriptor_sets(struct engine_data *data) {
+	VkDescriptorSetLayout layouts[MAX_FRAMES_IN_FLIGHT];
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		layouts[i] = data->descriptor_set_layout;
+	
+	VkDescriptorSetAllocateInfo alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.pNext = NULL,
+		.descriptorPool = data->descriptor_pool,
+		.descriptorSetCount = (uint32_t)MAX_FRAMES_IN_FLIGHT,
+		.pSetLayouts = layouts
+	};
+	if (vkAllocateDescriptorSets(data->device, &alloc_info, data->descriptor_sets) != VK_SUCCESS) {
+		printf("Failed to allocate descriptor sets! Aborting\n");
+		return error_return;
+	}
+
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		VkDescriptorBufferInfo buffer_info = {
+			.buffer = data->uniform_buffers[i],
+			.offset = 0,
+			.range = sizeof(struct uniform_buffer_widow_size)
+		};
+
+		VkWriteDescriptorSet descriptor_write = {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.pNext = NULL,
+			.dstSet = data->descriptor_sets[i],
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.pImageInfo = NULL,
+			.pBufferInfo = &buffer_info,
+			.pTexelBufferView = NULL
+		};
+
+		vkUpdateDescriptorSets(data->device, 1, &descriptor_write, 0, NULL);
 	}
 	return success_return;
 }
@@ -1211,7 +1277,7 @@ int engine_record_command_buffer(struct engine_data *data)
 	};
 	VkCommandBuffer *command_buffer = &data->command_buffers[data->current_frame];
 	if (UNLIKELY(vkBeginCommandBuffer(*command_buffer, &begin_info) != VK_SUCCESS)) {
-		printf("Failed to create begin recording command buffer!\n");
+		printf("Failed to create begin recording command buffer! Aborting\n");
 		return error_return;
 	}
 
@@ -1260,9 +1326,9 @@ int engine_record_command_buffer(struct engine_data *data)
 
 	vkCmdBindIndexBuffer(*command_buffer, data->triangle_main_index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
-	vkCmdDrawIndexed(*command_buffer, triangle_index_count, 1, 0, 0, 0);
+	vkCmdBindDescriptorSets(*command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data->triangle_pipeline_layout, 0, 1, &data->descriptor_sets[data->current_frame], 0, NULL);
 
-	//tutaj
+	vkCmdDrawIndexed(*command_buffer, triangle_index_count, 1, 0, 0, 0);
 
 	vkCmdBindPipeline(*command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
 	data->circle_graphics_pipeline);
@@ -1277,14 +1343,14 @@ int engine_record_command_buffer(struct engine_data *data)
 
 	vkCmdBindIndexBuffer(*command_buffer, data->circle_main_index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
-	vkCmdDrawIndexed(*command_buffer, circle_index_count, 1, 0, 0, 0);
+	vkCmdBindDescriptorSets(*command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, data->circle_pipeline_layout, 0, 1, &data->descriptor_sets[data->current_frame], 0, NULL);
 
-	//tutaj
+	vkCmdDrawIndexed(*command_buffer, circle_index_count, 1, 0, 0, 0);
       
 	vkCmdEndRenderPass(*command_buffer);
 
 	if (UNLIKELY(vkEndCommandBuffer(*command_buffer) != VK_SUCCESS)) {
-		printf("failed to record command buffer!\n");
+		printf("failed to record command buffer! Aborting\n");
 		return error_return;
 	}
 	return success_return;
@@ -1308,7 +1374,7 @@ int engine_create_sync_objects(struct engine_data *data)
 		if (UNLIKELY(vkCreateSemaphore(data->device, &semaphore_create_info, NULL, &data->image_available_semaphores[i]) != VK_SUCCESS) ||
 		    UNLIKELY(vkCreateSemaphore(data->device, &semaphore_create_info, NULL, &data->render_finished_semaphores[i]) != VK_SUCCESS) ||
 		    UNLIKELY(vkCreateFence(data->device, &fence_info, NULL, &data->in_flight_fences[i]) != VK_SUCCESS)) {
-			printf("failed to create synchronization objects for a frame!\n");
+			printf("failed to create synchronization objects! Aborting\n");
 			return error_return;
 		}
 	}
@@ -1354,7 +1420,7 @@ int engine_recreate_swapchain(struct engine_data *data)
 	data->swapchain_framebuffers = malloc(sizeof(VkFramebuffer) * data->swapchain_image_count);
 	for(int i = 0; i < data->swapchain_image_count; i++) {
 		if(engine_create_image_view(data, data->swapchain_images[i], data->surface_format.format, &data->swapchain_image_views[i]) != success_return) {
-			printf("Failed to recreate Image Views\n");
+			printf("Failed to recreate Image Views! Aborting\n");
 			return error_return;
 		}
 	}
@@ -1373,9 +1439,11 @@ int engine_draw_frame(struct engine_data *data)
 		engine_recreate_swapchain(data);
 		data->uniform_buffer.height = data->swapchain_extent.height;
 		data->uniform_buffer.width = data->swapchain_extent.width;
+		memcpy(data->uniform_buffers_mapped[data->current_frame], &data->uniform_buffer, sizeof(data->uniform_buffer));
+
 		return success_return;
 	} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-		printf("failed to acquire swap chain image!\n");
+		printf("failed to acquire swap chain image! Aborting\n");
 		return error_return;
 	}
 
@@ -1401,7 +1469,7 @@ int engine_draw_frame(struct engine_data *data)
 	};
 
 	if (UNLIKELY(vkQueueSubmit(data->graphics_queue, 1, &submit_info, data->in_flight_fences[data->current_frame]) != VK_SUCCESS)) {
-		printf("failed to submit draw command buffer!\n");
+		printf("failed to submit draw command buffer! Aborting\n");
 		return error_return;
 	}
 	VkSwapchainKHR swapchains[] = {data->swapchain};
@@ -1421,8 +1489,11 @@ int engine_draw_frame(struct engine_data *data)
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
 		framebuffer_resized = 0;
 		engine_recreate_swapchain(data);
+		data->uniform_buffer.height = data->swapchain_extent.height;
+		data->uniform_buffer.width = data->swapchain_extent.width;
+		memcpy(data->uniform_buffers_mapped[data->current_frame], &data->uniform_buffer, sizeof(data->uniform_buffer));
 	} else if (UNLIKELY(result != VK_SUCCESS)) {
-		printf("failed to present swap chain image!\n");
+		printf("failed to present swap chain image! Aborting\n");
 		return error_return;
 	}
 	return success_return;
@@ -1451,7 +1522,7 @@ void engine_cleanup(struct engine_data *data) {
 		vkDestroyBuffer(data->device, data->uniform_buffers[i], NULL);
 		vkFreeMemory(data->device, data->uniform_buffers_memory[i], NULL);
 	}
-
+	vkDestroyDescriptorPool(data->device, data->descriptor_pool, NULL);
 	vkDestroyDescriptorSetLayout(data->device, data->descriptor_set_layout, NULL);
 
 	vkDestroyFence(data->device, data->vertex_buffer_copy_fence, NULL);
@@ -1493,12 +1564,12 @@ int main()
 		return error_return;
 
 	if (UNLIKELY(glfwCreateWindowSurface(data.instance, data.window, NULL, &data.surface) != VK_SUCCESS)) {
-		printf("Failed to create window surface! Aborting!\n");
+		printf("Failed to create window surface! Aborting\n");
 		return error_return;
 	}
 
 	if (engine_pick_physical_device(&data) != success_return) {
-		printf("Unable to pick device! Aborting!\n");
+		printf("Unable to pick device! Aborting\n");
 		return error_return;
 	}
 
@@ -1506,7 +1577,7 @@ int main()
 	vkGetPhysicalDeviceProperties(data.physical_device, &data.physical_device_properties);
 
 	if (engine_find_queue_families(&data) != success_return) {
-		printf("Failed to find appropriate queue families! Aborting!\n");
+		printf("Failed to find appropriate queue families! Aborting\n");
 		return error_return;
 	}
 
@@ -1524,7 +1595,7 @@ int main()
 	engine_setting_swapchain_extent(&data);
 
 	if (engine_create_swapchain(&data) != success_return) {
-		printf("Failed to create swap chain! Aborting!\n");
+		printf("Failed to create swap chain! Aborting\n");
 		return error_return;
 	}
 
@@ -1537,13 +1608,13 @@ int main()
 
 	for(int i = 0; i < data.swapchain_image_count; i++) {
 		if(engine_create_image_view(&data, data.swapchain_images[i], data.surface_format.format, &data.swapchain_image_views[i]) != success_return) {
-			printf("Failed to create Image Views! Aborting!\n");
+			printf("Failed to create Image Views! Aborting\n");
 			return error_return;
 		}
 	}
 
 	if (engine_create_render_pass(&data) != success_return) {
-		printf("failed to create render pass! Aborting!\n");
+		printf("failed to create render pass! Aborting\n");
 		return error_return;
 	}
 
@@ -1588,6 +1659,12 @@ int main()
 		return error_return;
 
 	if (engine_create_command_buffers(&data))
+		return error_return;
+
+	if (engine_create_descriptor_pool(&data))
+		return error_return;
+
+	if (engine_create_descriptor_sets(&data))
 		return error_return;
 
 	engine_create_sync_objects(&data);

@@ -1,4 +1,4 @@
-/Engine/engine
+Engine/engine
 Engine/shaders/compiled/tr-vert.spv
 Engine/shaders/compiled/tr-frag.spv
 Engine/shaders/compiled/cr-vert.spv
