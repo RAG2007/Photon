@@ -1619,14 +1619,14 @@ int main()
 	}
 
 	if (engine_create_graphics_pipeline(&data, &data.triangle_graphics_pipeline,
-	&data.triangle_pipeline_layout, "shaders/compiled/tr-vert.spv", "shaders/compiled/tr-frag.spv", 0)
+	&data.triangle_pipeline_layout, "Engine/shaders/compiled/tr-vert.spv", "Engine/shaders/compiled/tr-frag.spv", 0)
 	   != success_return)
 		return error_return;
 
 	if (engine_descriptor_set_layout(&data) != success_return)
 		return error_return;
 
-	if (engine_create_graphics_pipeline(&data, &data.circle_graphics_pipeline, &data.circle_pipeline_layout, "shaders/compiled/cr-vert.spv", "shaders/compiled/cr-frag.spv", 1)
+	if (engine_create_graphics_pipeline(&data, &data.circle_graphics_pipeline, &data.circle_pipeline_layout, "Engine/shaders/compiled/cr-vert.spv", "Engine/shaders/compiled/cr-frag.spv", 1)
 	  != success_return)
 		return error_return;
 

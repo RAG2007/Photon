@@ -1,4 +1,4 @@
-glslang -V triangle.vert -o ./compiled/tr-vert.spv
-glslang -V triangle.frag -o ./compiled/tr-frag.spv
-glslang -V circle.vert -o ./compiled/cr-vert.spv
-glslang -V circle.frag -o ./compiled/cr-frag.spv
+glslang -V ./Engine/shaders/triangle.vert -o ./Engine/shaders/compiled/tr-vert.spv
+glslang -V ./Engine/shaders/triangle.frag -o ./Engine/shaders/compiled/tr-frag.spv
+glslang -V ./Engine/shaders/circle.vert -o ./Engine/shaders/compiled/cr-vert.spv
+glslang -V ./Engine/shaders/circle.frag -o ./Engine/shaders/compiled/cr-frag.spv
